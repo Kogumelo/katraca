@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Kogumelo/acesso"
-	"github.com/Kogumelo/acesso/provedor"
+	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/kracha/provedor"
 )
 
 func googleContra(t *testing.T, f *oidcFalso) *provedor.OIDC {
@@ -52,7 +52,7 @@ func TestGoogleCaminhoFeliz(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	quer := acesso.Identidade{Provedor: "google", ID: "1234567890", Email: "ana@exemplo.com",
+	quer := kracha.Identidade{Provedor: "google", ID: "1234567890", Email: "ana@exemplo.com",
 		EmailGarantido: true, Nome: "Ana", Foto: "https://exemplo.com/ana.png"}
 	if id.Provedor != quer.Provedor || id.ID != quer.ID || id.Email != quer.Email ||
 		id.EmailGarantido != quer.EmailGarantido || id.Nome != quer.Nome || id.Foto != quer.Foto {
@@ -71,12 +71,12 @@ func TestGoogleStateErradoRecusado(t *testing.T) {
 	endereco, pend, _ := g.Iniciar(ctx)
 	volta := f.autorizar(t, endereco, "1")
 	volta.Set("state", "outro")
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErrRecusado, veio %v", err)
 	}
 	// Volta sem state, tambem.
 	volta.Del("state")
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("sem state: quero ErrRecusado, veio %v", err)
 	}
 }
@@ -91,7 +91,7 @@ func TestGooglePKCE(t *testing.T) {
 	endereco, pend, _ := g.Iniciar(ctx)
 	volta := f.autorizar(t, endereco, "1")
 	pend.Verificador = "um-verificador-que-nao-gerou-o-desafio-aaaaaaaaaaaa"
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErrRecusado, veio %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestGoogleIDTokenAdulterado(t *testing.T) {
 			g := googleContra(t, f)
 			ctx := context.Background()
 			endereco, pend, _ := g.Iniciar(ctx)
-			if _, err := g.Concluir(ctx, pend, f.autorizar(t, endereco, "1")); !errors.Is(err, acesso.ErrRecusado) {
+			if _, err := g.Concluir(ctx, pend, f.autorizar(t, endereco, "1")); !errors.Is(err, kracha.ErrRecusado) {
 				t.Fatalf("quero ErrRecusado, veio %v", err)
 			}
 		})
@@ -144,7 +144,7 @@ func TestGoogleAssinaturaDeOutraChave(t *testing.T) {
 	// O falso passa a assinar com a chave de outro provedor, mesmo kid; o
 	// JWKS continua publicando a verdadeira.
 	f.Impostora = outro.rsa
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErrRecusado, veio %v", err)
 	}
 }
@@ -158,12 +158,12 @@ func TestPendenteVencidoOuDeOutro(t *testing.T) {
 
 	velho := pend
 	velho.Criado = time.Now().Add(-provedor.PrazoDoInicio - time.Second)
-	if _, err := g.Concluir(ctx, velho, volta); !errors.Is(err, acesso.ErrExpirado) {
+	if _, err := g.Concluir(ctx, velho, volta); !errors.Is(err, kracha.ErrExpirado) {
 		t.Fatalf("vencido: quero ErrExpirado, veio %v", err)
 	}
 	outro := pend
 	outro.Provedor = "github"
-	if _, err := g.Concluir(ctx, outro, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, outro, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("de outro provedor: quero ErrRecusado, veio %v", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestRecusaDoProvedor(t *testing.T) {
 	_, pend, _ := g.Iniciar(ctx)
 	_, err := g.Concluir(ctx, pend, url.Values{"error": {"access_denied"}, "state": {pend.Estado}})
 	var ep *provedor.ErroDoProvedor
-	if !errors.As(err, &ep) || ep.Codigo != "access_denied" || !errors.Is(err, acesso.ErrRecusado) {
+	if !errors.As(err, &ep) || ep.Codigo != "access_denied" || !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErroDoProvedor access_denied, veio %v", err)
 	}
 }

@@ -1,4 +1,4 @@
-package pgacesso_test
+package pgkracha_test
 
 import (
 	"context"
@@ -7,21 +7,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Kogumelo/acesso"
-	"github.com/Kogumelo/acesso/email"
-	"github.com/Kogumelo/acesso/email/emailteste"
-	"github.com/Kogumelo/acesso/pgacesso"
-	"github.com/Kogumelo/acesso/senha"
+	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/kracha/email"
+	"github.com/Kogumelo/kracha/email/emailteste"
+	"github.com/Kogumelo/kracha/pgkracha"
+	"github.com/Kogumelo/kracha/senha"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // Os testes daqui precisam de um Postgres descartavel:
 //
-//	ACESSO_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./pgacesso/
+//	ACESSO_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./pgkracha/
 //
 // Sem a variavel, pulam.
-func guarda(t *testing.T) *pgacesso.Guarda {
+func guarda(t *testing.T) *pgkracha.Guarda {
 	t.Helper()
 	u := os.Getenv("ACESSO_PG_URL")
 	if u == "" {
@@ -32,7 +32,7 @@ func guarda(t *testing.T) *pgacesso.Guarda {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	g := &pgacesso.Guarda{Banco: pool}
+	g := &pgkracha.Guarda{Banco: pool}
 	if err := g.CriarTabelas(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestSenhaNoBanco(t *testing.T) {
 	if !strings.HasPrefix(c.Hash, "$argon2id$") {
 		t.Fatalf("hash nao migrou: %s", c.Hash)
 	}
-	if _, _, err := s.Entrar(ctx, login+"-ninguem", "x"); !errors.Is(err, acesso.ErrRecusado) {
+	if _, _, err := s.Entrar(ctx, login+"-ninguem", "x"); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("sem usuario: %v", err)
 	}
 }
