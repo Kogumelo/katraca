@@ -261,3 +261,33 @@ soltar a tag `v0.4.0`.
 
 As seções acima ficam como foram escritas: são a memória de quando o nome
 era outro.
+
+## A Katraca ganha logo: o rotor K (11/10/2026)
+
+O logo é uma catraca de tripé que forma um K. A haste da letra é o poste; os
+três braços do rotor, iguais e a 120 graus, saem do cubo e formam o resto. Um
+deles aponta para trás e atravessa o poste, e os outros dois sobem e descem a
+60 graus.
+
+- **Os três braços são iguais (36).** Num rascunho anterior, o braço de trás
+  parava no poste e era menos da metade dos outros; ao girar, o K se
+  desmontava. Com os três iguais, um terço de volta deixa o desenho igual ao
+  de antes: uma pessoa passou e o K continua de pé.
+- **Poste e braços com a mesma espessura (10) e o mesmo raio de canto (2).**
+  O poste fica a 1,5 do disco do cubo.
+- **Verde**, `#26905f` a `#155c3c`, na placa do gabarito de ícone de Mac
+  (84 de lado, raio 19), a mesma do Konfig.
+
+Os arquivos ficam em `docs/marca/`:
+
+- `katraca.svg`: o logo oficial, parado. É o que o Sitroom mostra no cartão
+  do projeto.
+- `katraca-giro.svg`: o rotor dá um terço de volta a cada 3,2 s. Vai no
+  topo do README. Quem pede menos movimento no sistema vê o logo parado.
+- `katraca-16.svg`: desenho próprio para 16px, com tudo mais grosso (13),
+  cantos retos e sem o furo do cubo.
+
+Ficaram de fora a roda de catraca de bicicleta, o sinal `⊢` da lógica e uma
+catraca sem braço, que foram as outras direções estudadas. O cartão de
+compartilhamento do GitHub (1280×640) não foi feito: ele sobe à mão nas
+configurações do repositório.
