@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
+  <!-- Logo da Katraca com o giro: o rotor da um terco de volta (120 graus) em
+       torno do cubo e para. Como os tres bracos sao iguais, o K se remonta.
+       1,1 s girando, 2,1 s parado. Quem pede menos movimento ve o logo parado. -->
+  <style>
+    .rotor{transform-box:view-box;transform-origin:56px 50px;animation:passo 3.2s cubic-bezier(.6,0,.2,1) infinite}
+    @keyframes passo{0%,50%{transform:rotate(0)}85%,100%{transform:rotate(120deg)}}
+    @media (prefers-reduced-motion:reduce){.rotor{animation:none}}
+  </style>
+  <defs>
+    <linearGradient id="placa" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26905f"/><stop offset="1" stop-color="#155c3c"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="84" height="84" rx="19" fill="url(#placa)"/>
+  <rect x="34" y="22" width="10" height="56" rx="2" fill="#fff"/>
+  <g class="rotor" fill="#fff">
+    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(180 56 50)"/>
+    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(-60 56 50)"/>
+    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(60 56 50)"/>
+  </g>
+  <circle cx="56" cy="50" r="10.5" fill="#fff"/>
+  <circle cx="56" cy="50" r="4" fill="#1a7349"/>
+</svg>

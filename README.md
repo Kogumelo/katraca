@@ -1,3 +1,5 @@
+<img src="docs/marca/katraca-giro.svg" width="96" height="96" alt="Logo da Katraca: um K branco sobre placa verde, formado pelo poste e pelos três braços de uma catraca">
+
 # Katraca
 
 Katraca vem de catraca: ela confere quem a pessoa é; quem libera a passagem é o app.
