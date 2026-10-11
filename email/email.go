@@ -10,7 +10,7 @@
 //
 // A biblioteca nao manda e-mail: ela entrega a Mensagem ao Carteiro do app,
 // que monta o texto, o endereco do link e o remetente. Nem guarda nada: a
-// Guarda e do app (ha uma de referencia em pgkracha). Do segredo, a Guarda so
+// Guarda e do app (ha uma de referencia em pgkatraca). Do segredo, a Guarda so
 // ve o hash.
 package email
 
@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/katraca"
 )
 
 // Finalidade e para que a prova foi pedida.
@@ -67,7 +67,7 @@ var ErrNaoHa = errors.New("email: nenhuma emissao viva")
 type Guarda interface {
 	// Emitir guarda e. Antes, conta as emissoes do mesmo e-mail criadas
 	// depois de desde (qualquer forma e finalidade, usadas ou nao); se ja
-	// forem maximo, nao guarda e devolve kracha.ErrMuitosPedidos. Contar e
+	// forem maximo, nao guarda e devolve katraca.ErrMuitosPedidos. Contar e
 	// guardar nao se separam. Se e.Forma for Codigo, os codigos ainda nao
 	// usados do mesmo e-mail e finalidade deixam de valer.
 	Emitir(ctx context.Context, e Emissao, maximo int, desde time.Time) error
@@ -177,7 +177,7 @@ func (p *Prova) enviar(ctx context.Context, endereco string, f Finalidade, forma
 	if !finalidadeValida(f) {
 		return fmt.Errorf("email: finalidade desconhecida %q", f)
 	}
-	addr, err := kracha.NormalizarEmail(endereco)
+	addr, err := katraca.NormalizarEmail(endereco)
 	if err != nil {
 		return err
 	}
@@ -208,70 +208,70 @@ func (p *Prova) enviar(ctx context.Context, endereco string, f Finalidade, forma
 //
 // Receba o token por POST, nunca por GET: leitor de e-mail que "confere
 // links" abre GETs, e gastaria o uso unico antes da pessoa.
-func (p *Prova) ConferirLink(ctx context.Context, token string, f Finalidade) (kracha.Identidade, error) {
+func (p *Prova) ConferirLink(ctx context.Context, token string, f Finalidade) (katraca.Identidade, error) {
 	bruto, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(token))
 	if err != nil || len(bruto) != 32 {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	h := sha256.Sum256(bruto)
 	e, err := p.guarda.GastarLink(ctx, h[:], f)
 	if errors.Is(err, ErrNaoHa) {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	if err != nil {
-		return kracha.Identidade{}, err
+		return katraca.Identidade{}, err
 	}
 	if e.Finalidade != f || e.Forma != Link {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	if !p.cfg.Agora().Before(e.Expira) {
-		return kracha.Identidade{}, kracha.ErrExpirado
+		return katraca.Identidade{}, katraca.ErrExpirado
 	}
 	return identidade(e.Email), nil
 }
 
 // ConferirCodigo confere o codigo digitado para o endereco. Cada chamada gasta
 // uma tentativa, certa ou errada; passado o teto, nem o codigo certo vale.
-func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f Finalidade) (kracha.Identidade, error) {
-	addr, err := kracha.NormalizarEmail(endereco)
+func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f Finalidade) (katraca.Identidade, error) {
+	addr, err := katraca.NormalizarEmail(endereco)
 	if err != nil {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	codigo = limparCodigo(codigo)
 	if len(codigo) != 6 {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	e, err := p.guarda.TentarCodigo(ctx, addr, f)
 	if errors.Is(err, ErrNaoHa) {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	if err != nil {
-		return kracha.Identidade{}, err
+		return katraca.Identidade{}, err
 	}
 	if e.Finalidade != f || e.Forma != Codigo || e.Email != addr {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	if e.Tentativas > p.cfg.TetoDeTentativas {
-		return kracha.Identidade{}, kracha.ErrMuitasTentativas
+		return katraca.Identidade{}, katraca.ErrMuitasTentativas
 	}
 	if !p.cfg.Agora().Before(e.Expira) {
-		return kracha.Identidade{}, kracha.ErrExpirado
+		return katraca.Identidade{}, katraca.ErrExpirado
 	}
 	if subtle.ConstantTimeCompare(e.Hash, hashDoCodigo(e.ID, codigo)) != 1 {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	ok, err := p.guarda.Gastar(ctx, e.ID)
 	if err != nil {
-		return kracha.Identidade{}, err
+		return katraca.Identidade{}, err
 	}
 	if !ok {
-		return kracha.Identidade{}, kracha.ErrRecusado
+		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	return identidade(addr), nil
 }
 
-func identidade(addr string) kracha.Identidade {
-	return kracha.Identidade{Provedor: "email", ID: addr, Email: addr, EmailGarantido: true}
+func identidade(addr string) katraca.Identidade {
+	return katraca.Identidade{Provedor: "email", ID: addr, Email: addr, EmailGarantido: true}
 }
 
 // limparCodigo tira espacos e hifens que a pessoa digite ou cole ("123 456").

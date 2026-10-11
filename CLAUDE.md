@@ -1,6 +1,6 @@
-# Kracha
+# Katraca
 
-Biblioteca Go pública (`github.com/Kogumelo/kracha`) que prova quem a pessoa
+Biblioteca Go pública (`github.com/Kogumelo/katraca`) que prova quem a pessoa
 é, para os apps da Kogumelo. Os primeiros clientes são o Kotonazo e o Zebra
 de Chapéu. Esta é a dona da ferramenta. Os apps são usuários: a adoção em
 cada um é missão do app, não daqui.
@@ -17,9 +17,9 @@ cada um é missão do app, não daqui.
 
 - **A biblioteca prova; o app decide.** Nada aqui cria conta, sessão ou
   cookie, nem junta contas.
-- **O núcleo** (`kracha`, `email`, `senha`, `provedor`) importa só a
+- **O núcleo** (`katraca`, `email`, `senha`, `provedor`) importa só a
   biblioteca padrão, `golang.org/x/oauth2` e `golang.org/x/crypto`. O pgx
-  fica em `pgkracha`. O `TestFronteira` reprova quem quebrar isso.
+  fica em `pgkatraca`. O `TestFronteira` reprova quem quebrar isso.
 - **`EmailGarantido` nunca é inventado.** Ele vem do provedor ou da prova
   por e-mail. Adaptador que não sabe deixa falso.
 - **O `go.mod` pede Go 1.25**, o mesmo que os clientes pedem. Subir a
@@ -34,10 +34,10 @@ cada um é missão do app, não daqui.
 ```sh
 export PATH=/usr/local/go/bin:$PATH
 gofmt -l . && go vet ./... && go test ./...
-# pgkracha precisa de Postgres descartável:
-docker run -d --rm --name kracha-pg -e POSTGRES_PASSWORD=x -p 55432:5432 postgres:17-alpine
-KRACHA_PG_URL=postgres://postgres:x@localhost:55432/postgres go test -race ./...
-docker stop kracha-pg
+# pgkatraca precisa de Postgres descartável:
+docker run -d --rm --name katraca-pg -e POSTGRES_PASSWORD=x -p 55432:5432 postgres:17-alpine
+KATRACA_PG_URL=postgres://postgres:x@localhost:55432/postgres go test -race ./...
+docker stop katraca-pg
 ```
 
 ## Convenções

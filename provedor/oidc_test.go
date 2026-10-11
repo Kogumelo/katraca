@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Kogumelo/kracha"
-	"github.com/Kogumelo/kracha/provedor"
+	"github.com/Kogumelo/katraca"
+	"github.com/Kogumelo/katraca/provedor"
 )
 
 // Um provedor que a biblioteca nunca viu entra so por configuracao: e assim
@@ -76,7 +76,7 @@ func TestOIDCComoAApple(t *testing.T) {
 		Retorno:        "https://app.exemplo/volta/apple",
 		Escopos:        []string{"openid", "name", "email"},
 		ModoDeResposta: "form_post",
-		Traduzir: func(r provedor.Reivindicacoes, volta url.Values, id *kracha.Identidade) error {
+		Traduzir: func(r provedor.Reivindicacoes, volta url.Values, id *katraca.Identidade) error {
 			if r.Verdade("is_private_email") {
 				id.Extra = map[string]string{"email_privado": "sim"}
 			}
@@ -130,7 +130,7 @@ func TestOIDCTraduzirPodeRecusar(t *testing.T) {
 	if q, _ := url.Parse(endereco); q.Query().Get("hd") != "empresa.com" {
 		t.Fatalf("sem hd: %s", endereco)
 	}
-	if _, err := p.Concluir(ctx, pend, f.autorizar(t, endereco, "1")); !errors.Is(err, kracha.ErrRecusado) {
+	if _, err := p.Concluir(ctx, pend, f.autorizar(t, endereco, "1")); !errors.Is(err, katraca.ErrRecusado) {
 		t.Fatalf("conta de fora do dominio: quero ErrRecusado, veio %v", err)
 	}
 	f.Claims = func(c map[string]any) { c["hd"] = "empresa.com" }

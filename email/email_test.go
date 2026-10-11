@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Kogumelo/kracha"
-	"github.com/Kogumelo/kracha/email"
-	"github.com/Kogumelo/kracha/email/emailteste"
+	"github.com/Kogumelo/katraca"
+	"github.com/Kogumelo/katraca/email"
+	"github.com/Kogumelo/katraca/email/emailteste"
 )
 
 func TestMemoria(t *testing.T) {
@@ -17,7 +17,7 @@ func TestMemoria(t *testing.T) {
 func TestEnderecoInvalido(t *testing.T) {
 	p, _ := email.Nova(email.NovaMemoria(), &emailteste.Caixa{}, email.Config{})
 	for _, e := range []string{"", "ana", "ana@x", "Ana <ana@x.com>", "a@x.com\r\nBcc: b@y.com", "a@x.com, b@y.com"} {
-		if err := p.EnviarLink(context.Background(), e, email.Entrar); !errors.Is(err, kracha.ErrEmailInvalido) {
+		if err := p.EnviarLink(context.Background(), e, email.Entrar); !errors.Is(err, katraca.ErrEmailInvalido) {
 			t.Errorf("%q: quero ErrEmailInvalido, veio %v", e, err)
 		}
 	}

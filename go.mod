@@ -1,4 +1,4 @@
-module github.com/Kogumelo/kracha
+module github.com/Kogumelo/katraca
 
 go 1.25.0
 
