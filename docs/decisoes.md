@@ -139,3 +139,56 @@ A partir daqui:
 - Mudança na biblioteca é missão do projeto Acesso.
 - Adotar a biblioteca é missão de cada app: `d50b2be5` no Kotonazo,
   `398c0c10` no Zebra.
+
+## A biblioteca passa a se chamar Kracha (11/10/2026)
+
+Em 11/10 o operador decidiu trocar o nome `acesso` por **Kracha**. Lê-se
+"Krácha" e brinca com "crachá": o crachá diz quem a pessoa é, e quem decide
+se ela entra é o porteiro, ou seja, o app. É o invariante "a biblioteca
+prova; o app decide".
+
+Por que trocar:
+
+- **"acesso" colide nos apps clientes.** A palavra aparece em 35 arquivos do
+  Zebra (controle de acesso) e em 7 do Kotonazo ("último acesso"). O prefixo
+  `km-` não resolveria: pacote Go não leva hífen, e no código continuaria
+  `acesso.`.
+- **"prova" também foi descartada.** No Kotonazo ela é a palavra para teste
+  ("TestX prova que…", em 52 arquivos), e há helpers de teste com um
+  parâmetro chamado `prova`.
+- **"cracha" não aparece em nenhum dos dois apps.**
+- **Família K.** As ferramentas da Kogumelo trocam o `km-` pela inicial K:
+  Konph, Kracha. O operador preferiu Kracha a Kraxah, sabendo que a tônica se
+  lê "Krácha".
+
+A marca se escreve Kracha; caminho, pacotes e identificadores ficam em
+minúsculas, porque o caminho de módulo Go diferencia maiúsculas.
+
+O que mudou:
+
+- **Módulo:** `github.com/Kogumelo/kracha`.
+- **Pacotes:** o raiz passa a `kracha` (`acesso.go` virou `kracha.go`) e
+  `pgacesso` passa a `pgkracha`. As mensagens de erro começam por
+  `"kracha: "`.
+- **Tabelas e índices:** `kracha_prova`, `kracha_senha`, `kracha_prova_link`
+  e `kracha_prova_email`; a trava no banco usa a chave `'kracha_prova:'`.
+  Renomear sem migração foi possível porque nenhum app importava a
+  biblioteca ainda: o único `go.mod` que citava `github.com/Kogumelo/acesso`
+  era o dela.
+- A variável de teste `ACESSO_PG_URL` ficou com esse nome.
+
+A `v0.1.0` continua no cache do Go (proxy.golang.org) sob o nome antigo,
+`github.com/Kogumelo/acesso`, e não muda. A próxima tag, já com o nome novo,
+é a `v0.2.0`.
+
+Fica com o operador depois do merge:
+
+- renomear o repositório no GitHub: `gh repo rename kracha -R Kogumelo/acesso`
+  (o GitHub redireciona o endereço antigo);
+- soltar a tag `v0.2.0` na `main` já renomeada, sem mover a `v0.1.0`;
+- renomear a pasta local `~/Kogumelo/Ferramentas/acesso` e o projeto do
+  Sitroom (`~/.sitroom/projects/acesso.toml`);
+- atualizar os briefings das missões de adoção `d50b2be5` (Kotonazo) e
+  `398c0c10` (Zebra), que citam `github.com/Kogumelo/acesso`;
+- ajustar o CI (`.github/workflows/teste.yml`, fora do git), que ainda usa o
+  nome antigo do contêiner, quando ele subir.
