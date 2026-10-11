@@ -27,6 +27,16 @@ func main() {
 		base = "http://localhost:8080"
 	}
 
+	// A chave do app: 32 bytes ou mais, em base64 no .env
+	// (openssl rand -base64 32). Serve ao codigo por e-mail e ao selo do
+	// Pendente; cada um deriva a sua. Sem ela, o exemplo sorteia uma, e
+	// reiniciar derruba os codigos e os logins a meio caminho.
+	chave, _ := base64.StdEncoding.DecodeString(os.Getenv("KATRACA_CHAVE"))
+	if len(chave) == 0 {
+		chave = make([]byte, 32)
+		rand.Read(chave)
+	}
+
 	// O carteiro e do app: aqui ele so escreve o link no log.
 	carteiro := email.CarteiroFunc(func(_ context.Context, m email.Mensagem) error {
 		if m.Forma == email.Link {
@@ -36,7 +46,7 @@ func main() {
 		}
 		return nil
 	})
-	prova, err := email.Nova(email.NovaMemoria(), carteiro, email.Config{})
+	prova, err := email.Nova(email.NovaMemoria(), carteiro, email.Config{Chave: chave})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -58,14 +68,6 @@ func main() {
 		})
 	}
 
-	// O selo cifra o Pendente no cookie com a chave do app: 32 bytes ou mais,
-	// em base64 no .env (openssl rand -base64 32). Sem ela, o exemplo sorteia
-	// uma, e reiniciar derruba os logins a meio caminho.
-	chave, _ := base64.StdEncoding.DecodeString(os.Getenv("SELO_CHAVE"))
-	if len(chave) == 0 {
-		chave = make([]byte, 32)
-		rand.Read(chave)
-	}
 	selo := &provedor.Selo{Chaves: [][]byte{chave}}
 	if _, err := selo.Selar(provedor.Pendente{}); err != nil {
 		log.Fatal(err) // chave curta

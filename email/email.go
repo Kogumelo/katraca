@@ -16,6 +16,7 @@ package email
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -53,7 +54,7 @@ type Emissao struct {
 	Email      string // normalizado
 	Finalidade Finalidade
 	Forma      Forma
-	Hash       []byte // sha256 do token; no codigo, sha256(ID ":" codigo)
+	Hash       []byte // sha256 do token; no codigo, HMAC-SHA256 com a chave do app de ID ":" codigo
 	Criada     time.Time
 	Expira     time.Time
 	Tentativas int // so no codigo; a Guarda a incrementa em TentarCodigo
@@ -61,6 +62,16 @@ type Emissao struct {
 
 // ErrNaoHa e o que a Guarda devolve quando nao ha emissao viva que sirva.
 var ErrNaoHa = errors.New("email: nenhuma emissao viva")
+
+// TamanhoMinimoDaChave e o menor tamanho, em bytes, aceito para Config.Chave.
+const TamanhoMinimoDaChave = 32
+
+// ErrChaveCurta e erro de configuracao: Config.Chave vazia ou com menos de
+// TamanhoMinimoDaChave bytes.
+var ErrChaveCurta = fmt.Errorf("email: Config.Chave precisa de %d bytes ou mais", TamanhoMinimoDaChave)
+
+// JanelaDoTetoDiario e a janela de Config.TetoDiario.
+const JanelaDoTetoDiario = 24 * time.Hour
 
 // Guarda persiste as emissoes. Cada metodo e atomico: e isso que faz o uso
 // unico e o teto valerem com dois pedidos ao mesmo tempo.
@@ -78,8 +89,11 @@ type Guarda interface {
 	GastarLink(ctx context.Context, hash []byte, f Finalidade) (Emissao, error)
 
 	// TentarCodigo soma uma tentativa ao codigo mais recente ainda nao usado
-	// do e-mail e finalidade, e o devolve ja com a soma. Sem codigo: ErrNaoHa.
-	TentarCodigo(ctx context.Context, email string, f Finalidade) (Emissao, error)
+	// do e-mail e finalidade, e o devolve ja com a soma. Devolve tambem o
+	// total de tentativas, ja com esta, dos codigos do mesmo e-mail (qualquer
+	// finalidade, usados ou nao) criados depois de desde. Somar e contar nao
+	// se separam. Sem codigo: ErrNaoHa.
+	TentarCodigo(ctx context.Context, email string, f Finalidade, desde time.Time) (Emissao, int, error)
 
 	// Gastar marca como usada a emissao id, se ainda nao foi. Devolve false se
 	// outro pedido a gastou antes.
@@ -121,6 +135,16 @@ type Config struct {
 	// possibilidades; com 6 tentativas por codigo e 3 codigos por janela, a
 	// chance de acertar no chute e de 18 em um milhao a cada 15 minutos.
 	TetoDeTentativas int // 6
+	// TetoDiario de tentativas de codigo por e-mail em JanelaDoTetoDiario,
+	// somando todos os codigos e finalidades. Sem ele, os 18 chutes a cada
+	// 15 minutos nao acabam nunca: uns 5% de chance de acerto num mes.
+	// Passado o teto, nem o codigo certo vale ate a janela andar.
+	TetoDiario int // 30
+	// Chave do app, obrigatoria: 32 bytes ou mais de crypto/rand. Entra no
+	// hash do codigo, e sem ela quem le o banco acha o codigo vivo testando
+	// o milhao de codigos. Pode ser a mesma do provedor.Selo: cada uso deriva
+	// a sua. Trocar a chave derruba os codigos ainda nao usados.
+	Chave []byte
 	// Agora substitui o relogio, para teste.
 	Agora func() time.Time
 }
@@ -130,12 +154,16 @@ type Prova struct {
 	guarda   Guarda
 	carteiro Carteiro
 	cfg      Config
+	chave    []byte // a do codigo, derivada de cfg.Chave
 }
 
-// Nova monta a prova. Guarda e Carteiro sao obrigatorios.
+// Nova monta a prova. Guarda, Carteiro e Config.Chave sao obrigatorios.
 func Nova(g Guarda, c Carteiro, cfg Config) (*Prova, error) {
 	if g == nil || c == nil {
 		return nil, errors.New("email: Guarda e Carteiro sao obrigatorios")
+	}
+	if len(cfg.Chave) < TamanhoMinimoDaChave {
+		return nil, ErrChaveCurta
 	}
 	if cfg.PrazoDoLink <= 0 {
 		cfg.PrazoDoLink = 15 * time.Minute
@@ -152,10 +180,15 @@ func Nova(g Guarda, c Carteiro, cfg Config) (*Prova, error) {
 	if cfg.TetoDeTentativas <= 0 {
 		cfg.TetoDeTentativas = 6
 	}
+	if cfg.TetoDiario <= 0 {
+		cfg.TetoDiario = 30
+	}
 	if cfg.Agora == nil {
 		cfg.Agora = time.Now
 	}
-	return &Prova{guarda: g, carteiro: c, cfg: cfg}, nil
+	m := hmac.New(sha256.New, cfg.Chave)
+	m.Write([]byte("katraca/email/codigo/k1"))
+	return &Prova{guarda: g, carteiro: c, cfg: cfg, chave: m.Sum(nil)}, nil
 }
 
 func finalidadeValida(f Finalidade) bool {
@@ -193,7 +226,7 @@ func (p *Prova) enviar(ctx context.Context, endereco string, f Finalidade, forma
 		e.Expira = agora.Add(p.cfg.PrazoDoLink)
 	} else {
 		m.Codigo = codigoNovo()
-		e.Hash = hashDoCodigo(e.ID, m.Codigo)
+		e.Hash = p.hashDoCodigo(e.ID, m.Codigo)
 		e.Expira = agora.Add(p.cfg.PrazoDoCodigo)
 	}
 	m.Expira = e.Expira
@@ -231,7 +264,8 @@ func (p *Prova) ConferirLink(ctx context.Context, token string, f Finalidade) (k
 }
 
 // ConferirCodigo confere o codigo digitado para o endereco. Cada chamada gasta
-// uma tentativa, certa ou errada; passado o teto, nem o codigo certo vale.
+// uma tentativa, certa ou errada; passado o teto do codigo ou o teto diario
+// do endereco, nem o codigo certo vale.
 func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f Finalidade) (katraca.Identidade, error) {
 	addr, err := katraca.NormalizarEmail(endereco)
 	if err != nil {
@@ -241,7 +275,8 @@ func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f F
 	if len(codigo) != 6 {
 		return katraca.Identidade{}, katraca.ErrRecusado
 	}
-	e, err := p.guarda.TentarCodigo(ctx, addr, f)
+	agora := p.cfg.Agora()
+	e, noDia, err := p.guarda.TentarCodigo(ctx, addr, f, agora.Add(-JanelaDoTetoDiario))
 	if errors.Is(err, ErrNaoHa) {
 		return katraca.Identidade{}, katraca.ErrRecusado
 	}
@@ -251,13 +286,13 @@ func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f F
 	if e.Finalidade != f || e.Forma != Codigo || e.Email != addr {
 		return katraca.Identidade{}, katraca.ErrRecusado
 	}
-	if e.Tentativas > p.cfg.TetoDeTentativas {
+	if e.Tentativas > p.cfg.TetoDeTentativas || noDia > p.cfg.TetoDiario {
 		return katraca.Identidade{}, katraca.ErrMuitasTentativas
 	}
-	if !p.cfg.Agora().Before(e.Expira) {
+	if !agora.Before(e.Expira) {
 		return katraca.Identidade{}, katraca.ErrExpirado
 	}
-	if subtle.ConstantTimeCompare(e.Hash, hashDoCodigo(e.ID, codigo)) != 1 {
+	if subtle.ConstantTimeCompare(e.Hash, p.hashDoCodigo(e.ID, codigo)) != 1 {
 		return katraca.Identidade{}, katraca.ErrRecusado
 	}
 	ok, err := p.guarda.Gastar(ctx, e.ID)
@@ -289,11 +324,13 @@ func limparCodigo(c string) string {
 	return b.String()
 }
 
-// hashDoCodigo prende o codigo a emissao: o mesmo codigo em duas emissoes da
-// hashes diferentes, e uma tabela pronta do milhao de hashes nao serve.
-func hashDoCodigo(id, codigo string) []byte {
-	h := sha256.Sum256([]byte(id + ":" + codigo))
-	return h[:]
+// hashDoCodigo prende o codigo a emissao e a chave do app. O id faz o mesmo
+// codigo em duas emissoes dar hashes diferentes; a chave, que nao mora no
+// banco, impede quem le o banco de testar o milhao de codigos contra o hash.
+func (p *Prova) hashDoCodigo(id, codigo string) []byte {
+	m := hmac.New(sha256.New, p.chave)
+	m.Write([]byte(id + ":" + codigo))
+	return m.Sum(nil)
 }
 
 func codigoNovo() string {

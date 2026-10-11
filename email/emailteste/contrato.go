@@ -66,7 +66,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		// com isso.
 		r := &Relogio{t: time.Now().Truncate(time.Second)}
 		c := &Caixa{}
-		p, err := email.Nova(nova(t), c, email.Config{Agora: r.Agora})
+		p, err := email.Nova(nova(t), c, email.Config{Agora: r.Agora, Chave: []byte("chave de teste, nunca em producao")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -335,6 +335,40 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		wg.Wait()
 		if ok != 1 {
 			t.Fatalf("%d conferencias venceram; quero 1", ok)
+		}
+	})
+
+	t.Run("teto diario de chutes por endereco", func(t *testing.T) {
+		p, c, r := montar(t)
+		ender := endereco(t)
+		// Cinco codigos, um a cada 16 minutos (fora da janela do limite de
+		// envios), com seis chutes errados cada: trinta no dia.
+		for i := 0; i < 5; i++ {
+			if err := p.EnviarCodigo(ctx, ender, email.Entrar); err != nil {
+				t.Fatal(err)
+			}
+			errado := "000000"
+			if c.Ultima(t).Codigo == errado {
+				errado = "111111"
+			}
+			for j := 0; j < 6; j++ {
+				p.ConferirCodigo(ctx, ender, errado, email.Entrar)
+			}
+			r.Andar(16 * time.Minute)
+		}
+		if err := p.EnviarCodigo(ctx, ender, email.Entrar); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.ConferirCodigo(ctx, ender, c.Ultima(t).Codigo, email.Entrar); !errors.Is(err, katraca.ErrMuitasTentativas) {
+			t.Fatalf("depois de 30 chutes no dia: quero ErrMuitasTentativas, veio %v", err)
+		}
+		// Passado o dia, volta a valer.
+		r.Andar(24 * time.Hour)
+		if err := p.EnviarCodigo(ctx, ender, email.Entrar); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.ConferirCodigo(ctx, ender, c.Ultima(t).Codigo, email.Entrar); err != nil {
+			t.Fatalf("no dia seguinte devia valer: %v", err)
 		}
 	})
 

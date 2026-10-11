@@ -21,3 +21,16 @@ jobs:
       - run: go test -race ./...
         env:
           KATRACA_PG_URL: postgres://postgres:x@localhost:5432/postgres
+  # Falhas conhecidas nas dependencias e no Go. So avisa: roda com o Go
+  # estavel mais novo (o do go.mod e o minimo, e o govulncheck reprovaria
+  # sempre pela biblioteca padrao dele), e um achado aparece como trabalho
+  # vermelho sem reprovar o resto.
+  vulnerabilidades:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

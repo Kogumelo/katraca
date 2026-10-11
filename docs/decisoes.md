@@ -384,3 +384,29 @@ sugeria: essas são de quando o nome era outro, e a última publicada é a
 Ficaram com o operador, como pergunta no fim do relatório: a pimenta no
 hash do código, o teto de tentativas por endereço numa janela longa e o
 `govulncheck` no CI.
+
+## O código por e-mail ganha chave e teto diário, e a versão é a `v0.6.0` (11/10/2026)
+
+O operador respondeu às três perguntas da revisão aceitando as
+recomendações. Detalhes e testes estão no fim de
+[`revisao-2026-10-11.md`](revisao-2026-10-11.md).
+
+- **`email.Config.Chave` é obrigatória** (32 bytes ou mais). O hash do
+  código passa a ser um HMAC-SHA256 com uma chave derivada dela. Antes, quem
+  lesse o banco testava o milhão de códigos contra `sha256(id:código)` em
+  milissegundos e achava o código vivo. A chave pode ser a mesma do
+  `provedor.Selo`, porque cada uso deriva a sua. Sem ela, `email.Nova` dá
+  `email.ErrChaveCurta`.
+- **Teto diário por endereço:** `email.Config.TetoDiario` (30 tentativas
+  de código em 24 horas, somando códigos e finalidades). Para isso,
+  `email.Guarda.TentarCodigo` recebe o início da janela e devolve também o
+  total nela. `pgkatraca` soma e conta numa transação, sob a trava por
+  endereço. `Limpar` precisa de um corte de 24 horas atrás ou mais.
+- **`govulncheck` no CI, só avisando:** um trabalho à parte, com o Go
+  estável mais novo e `continue-on-error`.
+- O exemplo passa a ler a chave de `KATRACA_CHAVE`, que serve ao código e
+  ao selo.
+
+**A versão é a `v0.6.0`:** muda a interface da `email.Guarda` e a `Config`
+exige um campo novo. Com o número do meio abaixo de 1, quebrar sobe o
+número do meio. Nenhum app usa a biblioteca ainda.

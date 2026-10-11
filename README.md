@@ -8,7 +8,7 @@ Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
 (Kotonazo, Zebra de Chapéu e os que vierem).
 
 ```sh
-go get github.com/Kogumelo/katraca@v0.5.1
+go get github.com/Kogumelo/katraca@v0.6.0
 ```
 
 ## O que ela faz e o que fica no app
@@ -72,9 +72,9 @@ juntar, confira também:
 ### O que mais fica com o app
 
 - **Limite de tentativas na senha.** `Senhas.Entrar` não conta tentativas:
-  limite por login e por IP na rota. Também no `ConferirCodigo`, por IP: o
-  teto por código e o limite de envios dão até 18 chutes a cada 15 minutos
-  por endereço, sem fim.
+  limite por login e por IP na rota. No código por e-mail a biblioteca já
+  limita por endereço (6 por código, 30 por dia); um limite por IP no
+  `ConferirCodigo` ainda ajuda contra quem chuta em muitos endereços.
 - **Não revele quem tem conta.** Responda igual a "mande o link" exista a
   conta ou não, e na redefinição de senha mande a mensagem só se a conta
   existir, com a mesma resposta nos dois casos. `ErrMuitosPedidos` vale para
@@ -105,10 +105,19 @@ para outra.
 - Uso único. De dois cliques simultâneos, só um vence.
 - Teto de tentativas por código (6). Cada tentativa conta, certa ou errada.
   Passado o teto, nem o código certo vale. Um código novo derruba o anterior.
-- A `Guarda` só vê o hash: `sha256` do token; no código, `sha256(id:código)`.
+- Teto diário por endereço (30 tentativas em 24 horas, somando todos os
+  códigos). Sem ele, os 18 chutes a cada 15 minutos nunca acabariam. Passado
+  o teto, o código daquele endereço não vale até a janela andar; a pessoa
+  ainda entra pelo link ou por outro método.
+- A `Guarda` só vê o hash: `sha256` do token; no código, um HMAC-SHA256 de
+  `id:código` com a chave do app. A chave não mora no banco, e quem lê o
+  banco não acha o código testando o milhão de possibilidades.
+- **`Config.Chave` é obrigatória:** 32 bytes ou mais de `crypto/rand`, no
+  `.env` do app. Pode ser a mesma do `provedor.Selo`, porque cada uso deriva
+  a sua. Trocar a chave derruba os códigos ainda não usados (15 min).
 
 ```go
-prova, err := email.Nova(guarda, carteiro, email.Config{})
+prova, err := email.Nova(guarda, carteiro, email.Config{Chave: chave})
 err = prova.EnviarLink(ctx, "ana@exemplo.com", email.Entrar)
 // ... a pessoa clica; a tela manda o token por POST:
 id, err := prova.ConferirLink(ctx, token, email.Entrar)
@@ -300,7 +309,11 @@ banco e o driver que já usa:
 
 - `email.Guarda`: `Emitir`, `GastarLink`, `TentarCodigo`, `Gastar`. Cada
   método é atômico, e é isso que sustenta o uso único e o limite sob
-  concorrência.
+  concorrência. `TentarCodigo` devolve também o total de tentativas do
+  endereço nas últimas 24 horas, para o teto diário.
+- `pgkatraca.Guarda.Limpar` apaga as provas vencidas. Rode uma vez por dia
+  com um corte de 24 horas atrás ou mais, ou o teto diário esquece
+  tentativas que ainda contam.
 - `senha.Guarda`: `Credencial`, `TrocarHash`.
 
 Há duas implementações prontas:
@@ -357,7 +370,9 @@ RSA e EC geradas no teste. Os testes cobrem:
 - userinfo que tenta garantir o e-mail do id_token;
 - recusa do provedor sem `state`;
 - hash de senha com custo absurdo;
-- teto e uso único do código com tentativas simultâneas.
+- teto e uso único do código com tentativas simultâneas;
+- teto diário de tentativas por endereço;
+- hash do código que não sai do banco sem a chave do app.
 
 A revisão de segurança de 11/10/2026 está em
 [`docs/revisao-2026-10-11.md`](docs/revisao-2026-10-11.md).

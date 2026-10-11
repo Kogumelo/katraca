@@ -60,7 +60,7 @@ func (m *Memoria) GastarLink(_ context.Context, hash []byte, f Finalidade) (Emis
 	return Emissao{}, ErrNaoHa
 }
 
-func (m *Memoria) TentarCodigo(_ context.Context, email string, f Finalidade) (Emissao, error) {
+func (m *Memoria) TentarCodigo(_ context.Context, email string, f Finalidade, desde time.Time) (Emissao, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var achada *emissaoMemoria
@@ -72,10 +72,16 @@ func (m *Memoria) TentarCodigo(_ context.Context, email string, f Finalidade) (E
 		}
 	}
 	if achada == nil {
-		return Emissao{}, ErrNaoHa
+		return Emissao{}, 0, ErrNaoHa
 	}
 	achada.Tentativas++
-	return achada.Emissao, nil
+	noDia := 0
+	for _, x := range m.emissoes {
+		if x.Forma == Codigo && x.Email == email && x.Criada.After(desde) {
+			noDia += x.Tentativas
+		}
+	}
+	return achada.Emissao, noDia, nil
 }
 
 func (m *Memoria) Gastar(_ context.Context, id string) (bool, error) {

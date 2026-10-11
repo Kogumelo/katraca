@@ -106,14 +106,35 @@ func (g *Guarda) GastarLink(ctx context.Context, hash []byte, f email.Finalidade
 		RETURNING `+colunas, hash, string(f)))
 }
 
-func (g *Guarda) TentarCodigo(ctx context.Context, endereco string, f email.Finalidade) (email.Emissao, error) {
-	return ler(g.Banco.QueryRow(ctx, `
+func (g *Guarda) TentarCodigo(ctx context.Context, endereco string, f email.Finalidade, desde time.Time) (email.Emissao, int, error) {
+	tx, err := g.Banco.Begin(ctx)
+	if err != nil {
+		return email.Emissao{}, 0, err
+	}
+	defer tx.Rollback(ctx)
+	// A mesma trava do Emitir: somar a tentativa e contar as do dia nao se
+	// separam, e duas tentativas simultaneas nao contam uma sem a outra.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('katraca_prova:' || $1, 0))`, endereco); err != nil {
+		return email.Emissao{}, 0, err
+	}
+	e, err := ler(tx.QueryRow(ctx, `
 		UPDATE katraca_prova SET tentativas = tentativas + 1
 		 WHERE id = (SELECT id FROM katraca_prova
 		              WHERE forma = 'codigo' AND email = $1 AND finalidade = $2 AND usada_em IS NULL
 		              ORDER BY criada_em DESC LIMIT 1
 		              FOR UPDATE)
 		RETURNING `+colunas, endereco, string(f)))
+	if err != nil {
+		return email.Emissao{}, 0, err
+	}
+	var noDia int
+	if err := tx.QueryRow(ctx, `
+		SELECT coalesce(sum(tentativas), 0) FROM katraca_prova
+		 WHERE forma = 'codigo' AND email = $1 AND criada_em > $2`,
+		endereco, desde).Scan(&noDia); err != nil {
+		return email.Emissao{}, 0, err
+	}
+	return e, noDia, tx.Commit(ctx)
 }
 
 func (g *Guarda) Gastar(ctx context.Context, id string) (bool, error) {
@@ -122,8 +143,9 @@ func (g *Guarda) Gastar(ctx context.Context, id string) (bool, error) {
 }
 
 // Limpar apaga as provas vencidas antes de antes. Rode de vez em quando
-// (uma vez por dia basta); antes deve ficar alem da janela do limite por
-// endereco, ou o limite esquece pedidos recentes.
+// (uma vez por dia basta); antes deve ficar a pelo menos
+// email.JanelaDoTetoDiario (24 horas) do agora, ou o teto diario de
+// tentativas e o limite de envios esquecem o que ainda contam.
 func (g *Guarda) Limpar(ctx context.Context, antes time.Time) (int64, error) {
 	tag, err := g.Banco.Exec(ctx, `DELETE FROM katraca_prova WHERE expira_em < $1 AND criada_em < $1`, antes)
 	return tag.RowsAffected(), err
