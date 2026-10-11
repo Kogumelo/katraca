@@ -25,7 +25,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 	"golang.org/x/oauth2"
 )
 
@@ -38,7 +38,7 @@ type Provedor interface {
 	// Concluir confere a volta contra o Pendente e devolve a identidade.
 	// resposta sao os parametros da volta: a query no GET, o corpo no
 	// form_post (r.Form cobre os dois).
-	Concluir(ctx context.Context, pend Pendente, resposta url.Values) (acesso.Identidade, error)
+	Concluir(ctx context.Context, pend Pendente, resposta url.Values) (kracha.Identidade, error)
 }
 
 // Pendente e o que o app guarda entre Iniciar e Concluir. Nao e segredo de
@@ -53,7 +53,7 @@ type Pendente struct {
 }
 
 // ErroDoProvedor e a recusa que o proprio provedor mandou na volta
-// (?error=access_denied, por exemplo). Embrulha acesso.ErrRecusado.
+// (?error=access_denied, por exemplo). Embrulha kracha.ErrRecusado.
 type ErroDoProvedor struct {
 	Codigo    string
 	Descricao string
@@ -62,7 +62,7 @@ type ErroDoProvedor struct {
 func (e *ErroDoProvedor) Error() string {
 	return fmt.Sprintf("provedor: %s (%s)", e.Codigo, e.Descricao)
 }
-func (e *ErroDoProvedor) Unwrap() error { return acesso.ErrRecusado }
+func (e *ErroDoProvedor) Unwrap() error { return kracha.ErrRecusado }
 
 // PrazoDoInicio e quanto tempo a pessoa tem para ir ao provedor e voltar.
 const PrazoDoInicio = 10 * time.Minute
@@ -84,25 +84,25 @@ func aleatorio() string {
 // provedor, state e presenca do code.
 func conferirVolta(nome string, pend Pendente, resposta url.Values, agora time.Time) (string, error) {
 	if pend.Provedor != nome || pend.Estado == "" {
-		return "", fmt.Errorf("%w: pendente de outro provedor", acesso.ErrRecusado)
+		return "", fmt.Errorf("%w: pendente de outro provedor", kracha.ErrRecusado)
 	}
 	if agora.Sub(pend.Criado) > PrazoDoInicio || agora.Before(pend.Criado.Add(-time.Minute)) {
-		return "", acesso.ErrExpirado
+		return "", kracha.ErrExpirado
 	}
 	if e := resposta.Get("error"); e != "" {
 		return "", &ErroDoProvedor{Codigo: e, Descricao: resposta.Get("error_description")}
 	}
 	if subtle.ConstantTimeCompare([]byte(resposta.Get("state")), []byte(pend.Estado)) != 1 {
-		return "", fmt.Errorf("%w: state nao confere", acesso.ErrRecusado)
+		return "", fmt.Errorf("%w: state nao confere", kracha.ErrRecusado)
 	}
 	code := resposta.Get("code")
 	if code == "" {
-		return "", fmt.Errorf("%w: volta sem code", acesso.ErrRecusado)
+		return "", fmt.Errorf("%w: volta sem code", kracha.ErrRecusado)
 	}
 	return code, nil
 }
 
-// API chama a API do provedor com o token de acesso no cabecalho
+// API chama a API do provedor com o access token no cabecalho
 // Authorization — nunca na URL, onde cairia em log.
 type API struct {
 	Cliente *http.Client

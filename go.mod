@@ -1,4 +1,4 @@
-module github.com/Kogumelo/acesso
+module github.com/Kogumelo/kracha
 
 go 1.25.0
 

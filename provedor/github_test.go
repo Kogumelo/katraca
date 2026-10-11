@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Kogumelo/acesso"
-	"github.com/Kogumelo/acesso/provedor"
+	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/kracha/provedor"
 )
 
 // githubFalso imita github.com e api.github.com: autorizacao, troca do code
@@ -124,7 +124,7 @@ func TestGitHubStateErrado(t *testing.T) {
 	endereco, pend, _ := g.Iniciar(ctx)
 	volta := f.autorizar(t, endereco)
 	volta.Set("state", pend.Estado+"x")
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErrRecusado, veio %v", err)
 	}
 }
@@ -136,7 +136,7 @@ func TestGitHubPKCE(t *testing.T) {
 	endereco, pend, _ := g.Iniciar(ctx)
 	volta := f.autorizar(t, endereco)
 	pend.Verificador = "verificador-de-outra-ida-aaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, acesso.ErrRecusado) {
+	if _, err := g.Concluir(ctx, pend, volta); !errors.Is(err, kracha.ErrRecusado) {
 		t.Fatalf("quero ErrRecusado, veio %v", err)
 	}
 }
@@ -180,17 +180,17 @@ func TestAdaptadorOAuth2Falso(t *testing.T) {
 		Escopos:        []string{"email", "public_profile"},
 		AutorizarURL:   f.URL + "/login/oauth/authorize",
 		TokenURL:       f.URL + "/login/oauth/access_token",
-		Traduzir: func(ctx context.Context, api *provedor.API) (acesso.Identidade, error) {
+		Traduzir: func(ctx context.Context, api *provedor.API) (kracha.Identidade, error) {
 			var u struct {
 				ID    int64  `json:"id"`
 				Login string `json:"login"`
 			}
 			if err := api.JSON(ctx, f.URL+"/api/user", &u); err != nil {
-				return acesso.Identidade{}, err
+				return kracha.Identidade{}, err
 			}
 			// A Meta nao diz se o e-mail e verificado: o adaptador o manda
 			// como nao garantido.
-			return acesso.Identidade{ID: "m" + u.Login, Email: u.Login + "@exemplo.com", Nome: u.Login}, nil
+			return kracha.Identidade{ID: "m" + u.Login, Email: u.Login + "@exemplo.com", Nome: u.Login}, nil
 		},
 	}
 	ctx := context.Background()

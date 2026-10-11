@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 )
 
 // Google configura o login pelo Google.
@@ -47,9 +47,9 @@ func NovoGoogle(c Google) (*OIDC, error) {
 	if c.Dominio != "" {
 		cfg.ParametrosExtra = map[string]string{"hd": c.Dominio}
 		// O "hd" na URL e so sugestao; quem garante e a claim.
-		cfg.Traduzir = func(r Reivindicacoes, _ url.Values, _ *acesso.Identidade) error {
+		cfg.Traduzir = func(r Reivindicacoes, _ url.Values, _ *kracha.Identidade) error {
 			if r.Texto("hd") != c.Dominio {
-				return fmt.Errorf("%w: conta de fora do dominio %s", acesso.ErrRecusado, c.Dominio)
+				return fmt.Errorf("%w: conta de fora do dominio %s", kracha.ErrRecusado, c.Dominio)
 			}
 			return nil
 		}

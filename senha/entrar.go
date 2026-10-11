@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 )
 
 // Credencial e o que o app guarda de uma senha.
@@ -48,37 +48,37 @@ type Senhas struct {
 }
 
 // Entrar confere login e senha. Login inexistente e senha errada dao o mesmo
-// acesso.ErrRecusado e gastam o mesmo tempo: com login inexistente, a senha e
+// kracha.ErrRecusado e gastam o mesmo tempo: com login inexistente, a senha e
 // conferida contra um hash falso de mesmos parametros.
 //
 // Se o hash guardado e bcrypt ou argon2id fraco, Entrar grava um novo pela
 // Guarda e diz trocado=true. Falha nessa troca nao impede a entrada: o login
 // era valido, e a troca tenta de novo na proxima vez.
-func (s *Senhas) Entrar(ctx context.Context, login, senha string) (id acesso.Identidade, trocado bool, err error) {
+func (s *Senhas) Entrar(ctx context.Context, login, senha string) (id kracha.Identidade, trocado bool, err error) {
 	if s.Guarda == nil {
-		return acesso.Identidade{}, false, errors.New("senha: Guarda obrigatoria")
+		return kracha.Identidade{}, false, errors.New("senha: Guarda obrigatoria")
 	}
 	c, err := s.Guarda.Credencial(ctx, login)
 	if errors.Is(err, ErrNaoHa) {
 		s.ConferirSemUsuario(senha)
-		return acesso.Identidade{}, false, acesso.ErrRecusado
+		return kracha.Identidade{}, false, kracha.ErrRecusado
 	}
 	if err != nil {
-		return acesso.Identidade{}, false, err
+		return kracha.Identidade{}, false, err
 	}
 	ok, trocar, err := s.Parametros.Conferir(c.Hash, senha)
 	if err != nil {
-		return acesso.Identidade{}, false, err
+		return kracha.Identidade{}, false, err
 	}
 	if !ok {
-		return acesso.Identidade{}, false, acesso.ErrRecusado
+		return kracha.Identidade{}, false, kracha.ErrRecusado
 	}
 	if trocar {
 		if novo, err := s.Parametros.Gerar(senha); err == nil {
 			trocado = s.Guarda.TrocarHash(ctx, login, c.Hash, novo) == nil
 		}
 	}
-	return acesso.Identidade{
+	return kracha.Identidade{
 		Provedor:       "senha",
 		ID:             login,
 		Email:          c.Email,

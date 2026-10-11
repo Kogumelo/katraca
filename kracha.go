@@ -1,4 +1,4 @@
-// Package acesso prova quem a pessoa e. Nao cria conta, nao abre sessao, nao
+// Package kracha prova quem a pessoa e. Nao cria conta, nao abre sessao, nao
 // planta cookie: isso e do app.
 //
 // Todo metodo — prova por e-mail (link ou codigo), senha, Google, GitHub ou
@@ -13,8 +13,8 @@
 //     prova por e-mail.
 //   - senha: argon2id, verificacao de bcrypt legado, regras de forca.
 //   - provedor: OIDC por descoberta, adaptador OAuth2, Google e GitHub.
-//   - pgacesso: guarda de referencia em Postgres com pgx (opcional).
-package acesso
+//   - pgkracha: guarda de referencia em Postgres com pgx (opcional).
+package kracha
 
 import (
 	"errors"
@@ -52,15 +52,15 @@ type Identidade struct {
 var (
 	// ErrRecusado: a prova nao vale (senha errada, usuario inexistente, link
 	// usado, codigo errado, state trocado). O app responde sem dizer qual.
-	ErrRecusado = errors.New("acesso: prova recusada")
+	ErrRecusado = errors.New("kracha: prova recusada")
 	// ErrExpirado: a prova valia, mas o prazo passou.
 	ErrExpirado = fmt.Errorf("%w: prazo vencido", ErrRecusado)
 	// ErrMuitasTentativas: o codigo gastou o teto de tentativas.
 	ErrMuitasTentativas = fmt.Errorf("%w: tentativas esgotadas", ErrRecusado)
 	// ErrMuitosPedidos: o endereco ja recebeu o maximo de mensagens na janela.
-	ErrMuitosPedidos = errors.New("acesso: pedidos demais para este endereco")
+	ErrMuitosPedidos = errors.New("kracha: pedidos demais para este endereco")
 	// ErrEmailInvalido: o endereco nao e um e-mail nu e valido.
-	ErrEmailInvalido = errors.New("acesso: e-mail invalido")
+	ErrEmailInvalido = errors.New("kracha: e-mail invalido")
 )
 
 // NormalizarEmail aceita so o endereco nu ("ana@exemplo.com"), sem nome, sem

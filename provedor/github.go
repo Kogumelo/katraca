@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 )
 
 // GitHub configura o login pelo GitHub (OAuth App ou GitHub App).
@@ -45,7 +45,7 @@ func NovoGitHub(c GitHub) *OAuth2 {
 		AutorizarURL:   site + "/login/oauth/authorize",
 		TokenURL:       site + "/login/oauth/access_token",
 		Cliente:        c.Cliente,
-		Traduzir: func(ctx context.Context, a *API) (acesso.Identidade, error) {
+		Traduzir: func(ctx context.Context, a *API) (kracha.Identidade, error) {
 			var u struct {
 				ID        int64  `json:"id"`
 				Login     string `json:"login"`
@@ -53,7 +53,7 @@ func NovoGitHub(c GitHub) *OAuth2 {
 				AvatarURL string `json:"avatar_url"`
 			}
 			if err := a.JSON(ctx, api+"/user", &u); err != nil {
-				return acesso.Identidade{}, err
+				return kracha.Identidade{}, err
 			}
 			var emails []struct {
 				Email    string `json:"email"`
@@ -61,9 +61,9 @@ func NovoGitHub(c GitHub) *OAuth2 {
 				Verified bool   `json:"verified"`
 			}
 			if err := a.JSON(ctx, api+"/user/emails", &emails); err != nil {
-				return acesso.Identidade{}, err
+				return kracha.Identidade{}, err
 			}
-			id := acesso.Identidade{
+			id := kracha.Identidade{
 				ID:    strconv.FormatInt(u.ID, 10),
 				Nome:  u.Name,
 				Foto:  u.AvatarURL,
