@@ -230,3 +230,34 @@ era outro.
   `go get github.com/Kogumelo/kracha@v0.3.0`.
 - A `v0.1.0` (`3f4fa2f`, fora da `main`) continua onde estava, sob o nome
   antigo.
+
+## O nome definitivo é Katraca, e a próxima versão é a `v0.4.0` (11/10/2026)
+
+O operador fechou a pergunta deixada aberta pela missão `271d81f3`: o nome
+definitivo é **Katraca**, de catraca. A catraca confere o crachá e libera a
+passagem; quem decide quem passa continua sendo o app. Kracha foi nome de
+transição.
+
+O que mudou:
+
+- **Módulo:** `github.com/Kogumelo/katraca`.
+- **Pacotes:** o raiz passa a `katraca` (`kracha.go` virou `katraca.go`) e
+  `pgkracha` passa a `pgkatraca`. As mensagens de erro começam por
+  `"katraca: "`.
+- **Tabelas e índices:** `katraca_prova`, `katraca_senha`,
+  `katraca_prova_link` e `katraca_prova_email`; a trava no banco usa a chave
+  `'katraca_prova:'`. De novo sem migração: nenhum `go.mod` em
+  `~/Kogumelo/Jogos` importa a biblioteca.
+- **Variável de teste:** `KATRACA_PG_URL`, no código e no CI.
+
+As versões até a `v0.3.0` continuam no proxy do Go com os nomes antigos
+(`v0.1.0` e `v0.2.0` como `github.com/Kogumelo/acesso`, `v0.3.0` como
+`github.com/Kogumelo/kracha`) e não mudam; nada se publica no módulo antigo.
+A próxima tag, já com o nome novo, é a `v0.4.0`.
+
+Fica para a missão seguinte, depois do merge: renomear o repositório no
+GitHub, a pasta `~/Kogumelo/Ferramentas/kracha` e o projeto do Sitroom, e
+soltar a tag `v0.4.0`.
+
+As seções acima ficam como foram escritas: são a memória de quando o nome
+era outro.

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Kogumelo/kracha"
-	"github.com/Kogumelo/kracha/email"
+	"github.com/Kogumelo/katraca"
+	"github.com/Kogumelo/katraca/email"
 )
 
 // Relogio e um relogio de teste que so anda quando mandam.
@@ -90,11 +90,11 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		norm, _ := kracha.NormalizarEmail(ender)
+		norm, _ := katraca.NormalizarEmail(ender)
 		if id.Provedor != "email" || id.ID != norm || id.Email != norm || !id.EmailGarantido {
 			t.Fatalf("identidade errada: %+v", id)
 		}
-		if _, err := p.ConferirLink(ctx, m.Token, email.Entrar); !errors.Is(err, kracha.ErrRecusado) {
+		if _, err := p.ConferirLink(ctx, m.Token, email.Entrar); !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("segundo uso: quero ErrRecusado, veio %v", err)
 		}
 	})
@@ -106,7 +106,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		}
 		r.Andar(15*time.Minute + time.Second)
 		_, err := p.ConferirLink(ctx, c.Ultima(t).Token, email.Entrar)
-		if !errors.Is(err, kracha.ErrExpirado) || !errors.Is(err, kracha.ErrRecusado) {
+		if !errors.Is(err, katraca.ErrExpirado) || !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("quero ErrExpirado, veio %v", err)
 		}
 	})
@@ -117,7 +117,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 			t.Fatal(err)
 		}
 		tok := c.Ultima(t).Token
-		if _, err := p.ConferirLink(ctx, tok, email.Redefinir); !errors.Is(err, kracha.ErrRecusado) {
+		if _, err := p.ConferirLink(ctx, tok, email.Redefinir); !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("quero ErrRecusado, veio %v", err)
 		}
 		// E a tentativa errada nao o gastou.
@@ -129,7 +129,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 	t.Run("token adulterado", func(t *testing.T) {
 		p, _, _ := montar(t)
 		for _, tok := range []string{"", "abc", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"} {
-			if _, err := p.ConferirLink(ctx, tok, email.Entrar); !errors.Is(err, kracha.ErrRecusado) {
+			if _, err := p.ConferirLink(ctx, tok, email.Entrar); !errors.Is(err, katraca.ErrRecusado) {
 				t.Fatalf("token %q: quero ErrRecusado, veio %v", tok, err)
 			}
 		}
@@ -148,7 +148,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		if err := p.EnviarLink(ctx, ender, email.Confirmar); err != nil {
 			t.Fatal(err)
 		}
-		if err := p.EnviarLink(ctx, ender, email.Entrar); !errors.Is(err, kracha.ErrMuitosPedidos) {
+		if err := p.EnviarLink(ctx, ender, email.Entrar); !errors.Is(err, katraca.ErrMuitosPedidos) {
 			t.Fatalf("quarto pedido: quero ErrMuitosPedidos, veio %v", err)
 		}
 		// Outro endereco nao e afetado.
@@ -179,7 +179,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		if !id.EmailGarantido {
 			t.Fatal("codigo certo devia garantir o e-mail")
 		}
-		if _, err := p.ConferirCodigo(ctx, ender, m.Codigo, email.Redefinir); !errors.Is(err, kracha.ErrRecusado) {
+		if _, err := p.ConferirCodigo(ctx, ender, m.Codigo, email.Redefinir); !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("segundo uso: quero ErrRecusado, veio %v", err)
 		}
 	})
@@ -196,12 +196,12 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 			errado = "111111"
 		}
 		for i := 0; i < 6; i++ {
-			if _, err := p.ConferirCodigo(ctx, ender, errado, email.Entrar); !errors.Is(err, kracha.ErrRecusado) {
+			if _, err := p.ConferirCodigo(ctx, ender, errado, email.Entrar); !errors.Is(err, katraca.ErrRecusado) {
 				t.Fatalf("tentativa %d: quero ErrRecusado, veio %v", i+1, err)
 			}
 		}
 		_, err := p.ConferirCodigo(ctx, ender, certo, email.Entrar)
-		if !errors.Is(err, kracha.ErrMuitasTentativas) {
+		if !errors.Is(err, katraca.ErrMuitasTentativas) {
 			t.Fatalf("certo depois do teto: quero ErrMuitasTentativas, veio %v", err)
 		}
 	})
@@ -214,7 +214,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		}
 		r.Andar(15*time.Minute + time.Second)
 		_, err := p.ConferirCodigo(ctx, ender, c.Ultima(t).Codigo, email.Entrar)
-		if !errors.Is(err, kracha.ErrExpirado) {
+		if !errors.Is(err, katraca.ErrExpirado) {
 			t.Fatalf("quero ErrExpirado, veio %v", err)
 		}
 	})
@@ -234,7 +234,7 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		}
 		novo := c.Ultima(t).Codigo
 		if velho != novo {
-			if _, err := p.ConferirCodigo(ctx, ender, velho, email.Entrar); !errors.Is(err, kracha.ErrRecusado) {
+			if _, err := p.ConferirCodigo(ctx, ender, velho, email.Entrar); !errors.Is(err, katraca.ErrRecusado) {
 				t.Fatalf("codigo velho: quero ErrRecusado, veio %v", err)
 			}
 		}
@@ -250,10 +250,10 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 			t.Fatal(err)
 		}
 		cod := c.Ultima(t).Codigo
-		if _, err := p.ConferirCodigo(ctx, ender, cod, email.Entrar); !errors.Is(err, kracha.ErrRecusado) {
+		if _, err := p.ConferirCodigo(ctx, ender, cod, email.Entrar); !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("outra finalidade: quero ErrRecusado, veio %v", err)
 		}
-		if _, err := p.ConferirCodigo(ctx, "x"+ender, cod, email.Confirmar); !errors.Is(err, kracha.ErrRecusado) {
+		if _, err := p.ConferirCodigo(ctx, "x"+ender, cod, email.Confirmar); !errors.Is(err, katraca.ErrRecusado) {
 			t.Fatalf("outro endereco: quero ErrRecusado, veio %v", err)
 		}
 	})

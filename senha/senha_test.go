@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Kogumelo/kracha"
-	"github.com/Kogumelo/kracha/senha"
+	"github.com/Kogumelo/katraca"
+	"github.com/Kogumelo/katraca/senha"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -115,10 +115,10 @@ func TestEntrarMigraDoBcrypt(t *testing.T) {
 	if _, trocado, err := s.Entrar(ctx, "ana@x.com", "segredo123"); err != nil || trocado {
 		t.Fatalf("segunda: trocado=%v err=%v", trocado, err)
 	}
-	if _, _, err := s.Entrar(ctx, "ana@x.com", "errada"); !errors.Is(err, kracha.ErrRecusado) {
+	if _, _, err := s.Entrar(ctx, "ana@x.com", "errada"); !errors.Is(err, katraca.ErrRecusado) {
 		t.Fatalf("errada: %v", err)
 	}
-	if _, _, err := s.Entrar(ctx, "bia@x.com", "segredo123"); !errors.Is(err, kracha.ErrRecusado) {
+	if _, _, err := s.Entrar(ctx, "bia@x.com", "segredo123"); !errors.Is(err, katraca.ErrRecusado) {
 		t.Fatalf("sem usuario: %v", err)
 	}
 }

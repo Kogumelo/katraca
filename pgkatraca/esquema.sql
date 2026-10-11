@@ -1,9 +1,9 @@
--- Esquema de referencia da biblioteca kracha, em Postgres. O app pode
+-- Esquema de referencia da biblioteca katraca, em Postgres. O app pode
 -- copia-lo para as migracoes dele como esta, adapta-lo, ou ignora-lo e
 -- escrever a propria Guarda.
 
 -- Provas por e-mail emitidas (links e codigos). Do segredo, so o hash.
-CREATE TABLE IF NOT EXISTS kracha_prova (
+CREATE TABLE IF NOT EXISTS katraca_prova (
     id          text        PRIMARY KEY,
     email       text        NOT NULL,
     finalidade  text        NOT NULL CHECK (finalidade IN ('entrar', 'confirmar', 'redefinir')),
@@ -17,13 +17,13 @@ CREATE TABLE IF NOT EXISTS kracha_prova (
 
 -- O link e achado pelo hash; dois links com o mesmo hash seriam um token
 -- repetido, e o indice o recusa.
-CREATE UNIQUE INDEX IF NOT EXISTS kracha_prova_link ON kracha_prova (hash) WHERE forma = 'link';
+CREATE UNIQUE INDEX IF NOT EXISTS katraca_prova_link ON katraca_prova (hash) WHERE forma = 'link';
 -- O limite por endereco e o codigo vigente sao achados pelo e-mail.
-CREATE INDEX IF NOT EXISTS kracha_prova_email ON kracha_prova (email, criada_em);
+CREATE INDEX IF NOT EXISTS katraca_prova_email ON katraca_prova (email, criada_em);
 
 -- Hashes de senha. Num app com tabela de usuarios, o hash costuma morar la;
 -- esta tabela e para quem nao tem onde, e para mostrar o que a Guarda pede.
-CREATE TABLE IF NOT EXISTS kracha_senha (
+CREATE TABLE IF NOT EXISTS katraca_senha (
     login           text        PRIMARY KEY,
     hash            text        NOT NULL,
     email           text        NOT NULL DEFAULT '',

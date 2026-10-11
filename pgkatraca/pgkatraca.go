@@ -1,10 +1,10 @@
-// Package pgkracha e a Guarda de referencia em Postgres, com pgx. Serve a
+// Package pgkatraca e a Guarda de referencia em Postgres, com pgx. Serve a
 // prova por e-mail (email.Guarda) e a senha (senha.Guarda).
 //
 // E opcional: o nucleo da biblioteca nao importa pgx, e um app com lib/pq ou
 // database/sql escreve a propria Guarda — o SQL daqui e o contrato em
 // email/emailteste mostram o que ela precisa fazer.
-package pgkracha
+package pgkatraca
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Kogumelo/kracha"
-	"github.com/Kogumelo/kracha/email"
-	"github.com/Kogumelo/kracha/senha"
+	"github.com/Kogumelo/katraca"
+	"github.com/Kogumelo/katraca/email"
+	"github.com/Kogumelo/katraca/senha"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -55,28 +55,28 @@ func (g *Guarda) Emitir(ctx context.Context, e email.Emissao, maximo int, desde 
 	defer tx.Rollback(ctx)
 	// A trava por endereco junta contar e guardar: dois pedidos simultaneos
 	// para o mesmo e-mail esperam um pelo outro, e o limite vale.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('kracha_prova:' || $1, 0))`, e.Email); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('katraca_prova:' || $1, 0))`, e.Email); err != nil {
 		return err
 	}
 	var n int
 	if err := tx.QueryRow(ctx, `
-		SELECT count(*) FROM kracha_prova WHERE email = $1 AND criada_em > $2`,
+		SELECT count(*) FROM katraca_prova WHERE email = $1 AND criada_em > $2`,
 		e.Email, desde).Scan(&n); err != nil {
 		return err
 	}
 	if n >= maximo {
-		return kracha.ErrMuitosPedidos
+		return katraca.ErrMuitosPedidos
 	}
 	if e.Forma == email.Codigo {
 		if _, err := tx.Exec(ctx, `
-			UPDATE kracha_prova SET usada_em = $3
+			UPDATE katraca_prova SET usada_em = $3
 			 WHERE email = $1 AND finalidade = $2 AND forma = 'codigo' AND usada_em IS NULL`,
 			e.Email, string(e.Finalidade), e.Criada); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO kracha_prova (id, email, finalidade, forma, hash, criada_em, expira_em)
+		INSERT INTO katraca_prova (id, email, finalidade, forma, hash, criada_em, expira_em)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		e.ID, e.Email, string(e.Finalidade), string(e.Forma), e.Hash, e.Criada, e.Expira); err != nil {
 		return err
@@ -101,15 +101,15 @@ func (g *Guarda) GastarLink(ctx context.Context, hash []byte, f email.Finalidade
 	// Conferir e gastar na mesma instrucao: de dois cliques, so um acha
 	// usada_em nulo.
 	return ler(g.Banco.QueryRow(ctx, `
-		UPDATE kracha_prova SET usada_em = now()
+		UPDATE katraca_prova SET usada_em = now()
 		 WHERE forma = 'link' AND hash = $1 AND finalidade = $2 AND usada_em IS NULL
 		RETURNING `+colunas, hash, string(f)))
 }
 
 func (g *Guarda) TentarCodigo(ctx context.Context, endereco string, f email.Finalidade) (email.Emissao, error) {
 	return ler(g.Banco.QueryRow(ctx, `
-		UPDATE kracha_prova SET tentativas = tentativas + 1
-		 WHERE id = (SELECT id FROM kracha_prova
+		UPDATE katraca_prova SET tentativas = tentativas + 1
+		 WHERE id = (SELECT id FROM katraca_prova
 		              WHERE forma = 'codigo' AND email = $1 AND finalidade = $2 AND usada_em IS NULL
 		              ORDER BY criada_em DESC LIMIT 1
 		              FOR UPDATE)
@@ -117,7 +117,7 @@ func (g *Guarda) TentarCodigo(ctx context.Context, endereco string, f email.Fina
 }
 
 func (g *Guarda) Gastar(ctx context.Context, id string) (bool, error) {
-	tag, err := g.Banco.Exec(ctx, `UPDATE kracha_prova SET usada_em = now() WHERE id = $1 AND usada_em IS NULL`, id)
+	tag, err := g.Banco.Exec(ctx, `UPDATE katraca_prova SET usada_em = now() WHERE id = $1 AND usada_em IS NULL`, id)
 	return tag.RowsAffected() == 1, err
 }
 
@@ -125,14 +125,14 @@ func (g *Guarda) Gastar(ctx context.Context, id string) (bool, error) {
 // (uma vez por dia basta); antes deve ficar alem da janela do limite por
 // endereco, ou o limite esquece pedidos recentes.
 func (g *Guarda) Limpar(ctx context.Context, antes time.Time) (int64, error) {
-	tag, err := g.Banco.Exec(ctx, `DELETE FROM kracha_prova WHERE expira_em < $1 AND criada_em < $1`, antes)
+	tag, err := g.Banco.Exec(ctx, `DELETE FROM katraca_prova WHERE expira_em < $1 AND criada_em < $1`, antes)
 	return tag.RowsAffected(), err
 }
 
 func (g *Guarda) Credencial(ctx context.Context, login string) (senha.Credencial, error) {
 	var c senha.Credencial
 	err := g.Banco.QueryRow(ctx, `
-		SELECT hash, email, email_garantido FROM kracha_senha WHERE login = $1`, login).
+		SELECT hash, email, email_garantido FROM katraca_senha WHERE login = $1`, login).
 		Scan(&c.Hash, &c.Email, &c.EmailGarantido)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return senha.Credencial{}, senha.ErrNaoHa
@@ -142,7 +142,7 @@ func (g *Guarda) Credencial(ctx context.Context, login string) (senha.Credencial
 
 func (g *Guarda) TrocarHash(ctx context.Context, login, antigo, novo string) error {
 	_, err := g.Banco.Exec(ctx, `
-		UPDATE kracha_senha SET hash = $3, trocada_em = now() WHERE login = $1 AND hash = $2`,
+		UPDATE katraca_senha SET hash = $3, trocada_em = now() WHERE login = $1 AND hash = $2`,
 		login, antigo, novo)
 	return err
 }
@@ -151,7 +151,7 @@ func (g *Guarda) TrocarHash(ctx context.Context, login, antigo, novo string) err
 // vem de senha.Senhas.Gerar.
 func (g *Guarda) GravarSenha(ctx context.Context, login, hash string, c senha.Credencial) error {
 	_, err := g.Banco.Exec(ctx, `
-		INSERT INTO kracha_senha (login, hash, email, email_garantido) VALUES ($1, $2, $3, $4)
+		INSERT INTO katraca_senha (login, hash, email, email_garantido) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (login) DO UPDATE
 		   SET hash = EXCLUDED.hash, email = EXCLUDED.email,
 		       email_garantido = EXCLUDED.email_garantido, trocada_em = now()`,

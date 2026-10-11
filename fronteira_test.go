@@ -1,4 +1,4 @@
-package kracha_test
+package katraca_test
 
 import (
 	"go/parser"
@@ -10,7 +10,7 @@ import (
 )
 
 // O nucleo importa so a biblioteca padrao, golang.org/x/oauth2 e
-// golang.org/x/crypto. pgx (e qualquer outra coisa) fica em pgkracha: o
+// golang.org/x/crypto. pgx (e qualquer outra coisa) fica em pgkatraca: o
 // Zebra usa lib/pq e gin, e nao pode herdar dependencia de ninguem.
 func TestFronteira(t *testing.T) {
 	permitido := func(imp string) bool {
@@ -19,14 +19,14 @@ func TestFronteira(t *testing.T) {
 		}
 		return strings.HasPrefix(imp, "golang.org/x/oauth2") ||
 			strings.HasPrefix(imp, "golang.org/x/crypto") ||
-			strings.HasPrefix(imp, "github.com/Kogumelo/kracha")
+			strings.HasPrefix(imp, "github.com/Kogumelo/katraca")
 	}
 	fset := token.NewFileSet()
 	err := filepath.WalkDir(".", func(caminho string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && (d.Name() == "pgkracha" || strings.HasPrefix(d.Name(), ".")) && caminho != "." {
+		if d.IsDir() && (d.Name() == "pgkatraca" || strings.HasPrefix(d.Name(), ".")) && caminho != "." {
 			return filepath.SkipDir
 		}
 		if d.IsDir() || !strings.HasSuffix(caminho, ".go") || strings.HasSuffix(caminho, "_test.go") {

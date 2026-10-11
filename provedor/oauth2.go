@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/katraca"
 	"golang.org/x/oauth2"
 )
 
@@ -28,7 +28,7 @@ type OAuth2 struct {
 	ParametrosExtra map[string]string
 	// Traduzir le a pessoa na API do provedor. api ja leva o token no
 	// cabecalho, prazo e limite de tamanho.
-	Traduzir func(ctx context.Context, api *API) (kracha.Identidade, error)
+	Traduzir func(ctx context.Context, api *API) (katraca.Identidade, error)
 	Cliente  *http.Client // vazio vale ClientePadrao
 	Agora    func() time.Time
 }
@@ -68,10 +68,10 @@ func (o *OAuth2) Iniciar(ctx context.Context) (string, Pendente, error) {
 	return o.config().AuthCodeURL(pend.Estado, opts...), pend, nil
 }
 
-func (o *OAuth2) Concluir(ctx context.Context, pend Pendente, resposta url.Values) (kracha.Identidade, error) {
+func (o *OAuth2) Concluir(ctx context.Context, pend Pendente, resposta url.Values) (katraca.Identidade, error) {
 	code, err := conferirVolta(o.NomeDoProvedor, pend, resposta, o.agora())
 	if err != nil {
-		return kracha.Identidade{}, err
+		return katraca.Identidade{}, err
 	}
 	var opts []oauth2.AuthCodeOption
 	if pend.Verificador != "" {
@@ -79,18 +79,18 @@ func (o *OAuth2) Concluir(ctx context.Context, pend Pendente, resposta url.Value
 	}
 	tok, err := o.config().Exchange(comCliente(ctx, o.Cliente), code, opts...)
 	if err != nil {
-		return kracha.Identidade{}, fmt.Errorf("%w: troca do code: %v", kracha.ErrRecusado, err)
+		return katraca.Identidade{}, fmt.Errorf("%w: troca do code: %v", katraca.ErrRecusado, err)
 	}
 	id, err := o.Traduzir(ctx, &API{Cliente: o.Cliente, Token: tok})
 	if err != nil {
-		return kracha.Identidade{}, err
+		return katraca.Identidade{}, err
 	}
 	if id.ID == "" {
-		return kracha.Identidade{}, fmt.Errorf("provedor %s: identidade sem ID", o.NomeDoProvedor)
+		return katraca.Identidade{}, fmt.Errorf("provedor %s: identidade sem ID", o.NomeDoProvedor)
 	}
 	id.Provedor = o.NomeDoProvedor
 	if id.Email != "" {
-		if e, err := kracha.NormalizarEmail(id.Email); err == nil {
+		if e, err := katraca.NormalizarEmail(id.Email); err == nil {
 			id.Email = e
 		} else {
 			id.Email, id.EmailGarantido = "", false
