@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
-  <!-- Logo da Katraca: rotor K. O poste e a haste do K; os tres bracos de uma
-       catraca de tripe, a 120 graus, saem do cubo e formam o resto da letra.
+  <!-- Logo da Katraca: rotor K com fresta. O poste e o gabinete da catraca,
+       com a fenda do leitor de cartao; os tres bracos de uma catraca de tripe,
+       a 120 graus, saem do cubo e formam o resto da letra.
        Placa no gabarito do macOS (84 de lado dentro de 100, raio 19).
-       Poste e bracos com espessura 10 e cantos de raio 2. Bracos de 36.
-       O poste fica a 1,5 do disco do cubo; o braco de tras atravessa o poste. -->
+       Bracos de 30 com espessura 10 e cantos de raio 2; poste de 15.
+       O braco de tras para a 2 do poste: a fresta e a passagem. -->
   <defs>
     <linearGradient id="placa" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#26905f"/><stop offset="1" stop-color="#155c3c"/>
@@ -11,11 +12,12 @@
   </defs>
   <rect x="8" y="8" width="84" height="84" rx="19" fill="url(#placa)"/>
   <g fill="#fff">
-    <rect x="34" y="22" width="10" height="56" rx="2"/>
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(180 56 50)"/>
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(-60 56 50)"/>
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(60 56 50)"/>
-    <circle cx="56" cy="50" r="10.5"/>
+    <rect x="17" y="22" width="15" height="56" rx="2"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(180 64 50)"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(-60 64 50)"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(60 64 50)"/>
+    <circle cx="64" cy="50" r="10.5"/>
   </g>
-  <circle cx="56" cy="50" r="4" fill="#1a7349"/>
+  <rect x="21" y="29" width="7" height="3" rx="1.5" fill="#1a7349"/>
+  <circle cx="64" cy="50" r="4" fill="#1a7349"/>
 </svg>
