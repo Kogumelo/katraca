@@ -192,3 +192,20 @@ Fica com o operador depois do merge:
   `398c0c10` (Zebra), que citam `github.com/Kogumelo/acesso`;
 - ajustar o CI (`.github/workflows/teste.yml`, fora do git), que ainda usa o
   nome antigo do contêiner, quando ele subir.
+
+## O nome antigo sai do que ainda falava "acesso" (11/10/2026)
+
+A troca de nome tinha ficado na branch da missão `ea9e0dc3`, sem chegar à
+`main`, e a pasta e o repositório foram renomeados antes do merge. A missão
+`73c8ccfd` trouxe aquela branch e fechou o que sobrava:
+
+- A variável de teste passa a `KRACHA_PG_URL`; `ACESSO_PG_URL` não é mais
+  lida. O CI (`.github/workflows/teste.yml`, ainda fora do git) foi ajustado
+  junto.
+- Já estavam feitos pelo operador: o repositório no GitHub se chama
+  `Kogumelo/kracha` e a pasta é `~/Kogumelo/Ferramentas/kracha`.
+- Os briefings das missões guardadas passam a citar `github.com/Kogumelo/kracha`,
+  a pasta nova e os pacotes `kracha`/`pgkracha`.
+
+As seções acima ficam como foram escritas: são a memória de quando o nome
+era outro.

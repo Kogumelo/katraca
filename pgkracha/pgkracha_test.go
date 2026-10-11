@@ -18,14 +18,14 @@ import (
 
 // Os testes daqui precisam de um Postgres descartavel:
 //
-//	ACESSO_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./pgkracha/
+//	KRACHA_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./pgkracha/
 //
 // Sem a variavel, pulam.
 func guarda(t *testing.T) *pgkracha.Guarda {
 	t.Helper()
-	u := os.Getenv("ACESSO_PG_URL")
+	u := os.Getenv("KRACHA_PG_URL")
 	if u == "" {
-		t.Skip("ACESSO_PG_URL vazia: sem Postgres para testar")
+		t.Skip("KRACHA_PG_URL vazia: sem Postgres para testar")
 	}
 	pool, err := pgxpool.New(context.Background(), u)
 	if err != nil {
