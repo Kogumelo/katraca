@@ -8,8 +8,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -58,6 +58,19 @@ func main() {
 		})
 	}
 
+	// O selo cifra o Pendente no cookie com a chave do app: 32 bytes ou mais,
+	// em base64 no .env (openssl rand -base64 32). Sem ela, o exemplo sorteia
+	// uma, e reiniciar derruba os logins a meio caminho.
+	chave, _ := base64.StdEncoding.DecodeString(os.Getenv("SELO_CHAVE"))
+	if len(chave) == 0 {
+		chave = make([]byte, 32)
+		rand.Read(chave)
+	}
+	selo := &provedor.Selo{Chaves: [][]byte{chave}}
+	if _, err := selo.Selar(provedor.Pendente{}); err != nil {
+		log.Fatal(err) // chave curta
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /link", func(w http.ResponseWriter, r *http.Request) {
 		err := prova.EnviarLink(r.Context(), r.FormValue("email"), email.Entrar)
@@ -83,23 +96,23 @@ func main() {
 			http.Error(w, "provedor fora do ar", http.StatusBadGateway)
 			return
 		}
-		// Num app de verdade, este cookie e ASSINADO (HMAC com segredo do
-		// app); aqui vai cru para o exemplo caber numa tela.
-		b, _ := json.Marshal(pend)
-		http.SetCookie(w, &http.Cookie{Name: "pendente", Value: base64.RawURLEncoding.EncodeToString(b),
-			Path: "/volta/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode, MaxAge: 600})
+		if err := selo.PlantarCookie(w, "/volta/", pend); err != nil {
+			http.Error(w, "erro", http.StatusInternalServerError)
+			return
+		}
 		http.Redirect(w, r, destino, http.StatusFound)
 	})
 	mux.HandleFunc("/volta/{p}", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := provedores[r.PathValue("p")]
-		c, err := r.Cookie("pendente")
-		if !ok || err != nil {
-			http.Error(w, "volta sem ida", http.StatusBadRequest)
+		if !ok {
+			http.NotFound(w, r)
 			return
 		}
-		var pend provedor.Pendente
-		b, _ := base64.RawURLEncoding.DecodeString(c.Value)
-		json.Unmarshal(b, &pend)
+		pend, err := selo.LerCookie(w, r, "/volta/")
+		if err != nil {
+			responder(w, katraca.Identidade{}, err)
+			return
+		}
 		r.ParseForm()
 		id, err := p.Concluir(r.Context(), pend, r.Form)
 		responder(w, id, err)
