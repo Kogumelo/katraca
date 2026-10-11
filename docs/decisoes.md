@@ -209,3 +209,24 @@ A troca de nome tinha ficado na branch da missão `ea9e0dc3`, sem chegar à
 
 As seções acima ficam como foram escritas: são a memória de quando o nome
 era outro.
+
+## O CI sobe e a versão a usar é a `v0.3.0` (11/10/2026)
+
+- **O CI está no ar.** `.github/workflows/teste.yml` entrou no git: gofmt,
+  `go vet` e `go test -race ./...` com um Postgres 17 de serviço
+  (`KRACHA_PG_URL`), em todo push e pull request. A versão do Go vem do
+  `go.mod`; as actions subiram para `actions/checkout@v7` e
+  `actions/setup-go@v7`. O push antes recusado precisava do escopo
+  `workflow` no token do `gh`, que agora existe.
+- **A `v0.2.0` não serve e fica como está.** Ela já tinha sido solta, como
+  tag leve, no commit `767e037`, anterior à troca de nome: o `go.mod` dali
+  ainda diz `github.com/Kogumelo/acesso`. O proxy do Go guardou essa versão
+  sob os dois nomes, e `go get github.com/Kogumelo/kracha@v0.2.0` falha por
+  caminho de módulo divergente. Tag publicada não se move, então o número
+  foi abandonado.
+- **A versão a usar é a `v0.3.0`**, tag anotada no commit da `main` com o CI
+  verde. É a primeira com o nome `github.com/Kogumelo/kracha` e leva a
+  licença MIT, o `CLAUDE.md`, esta memória e o CI. O README já manda
+  `go get github.com/Kogumelo/kracha@v0.3.0`.
+- A `v0.1.0` (`3f4fa2f`, fora da `main`) continua onde estava, sob o nome
+  antigo.

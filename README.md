@@ -6,7 +6,7 @@ Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
 (Kotonazo, Zebra de Chapéu e os que vierem).
 
 ```sh
-go get github.com/Kogumelo/kracha@v0.2.0
+go get github.com/Kogumelo/kracha@v0.3.0
 ```
 
 ## O que ela faz e o que fica no app
