@@ -279,3 +279,8 @@ RSA e EC geradas no teste. Os testes cobrem:
 Não há segredo neste repositório, nem haverá. As chaves dos provedores ficam
 no `.env` de cada app. Veja [`exemplo/.env.exemplo`](exemplo/.env.exemplo):
 as variáveis vêm vazias.
+
+## Licença
+
+[MIT](LICENSE), © 2026 Kogumelo Informática Ltda. Use, copie e modifique à
+vontade, mantendo o aviso de copyright. O código vem sem garantia.
