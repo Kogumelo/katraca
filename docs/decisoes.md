@@ -1,0 +1,141 @@
+# Decisões
+
+A memória das decisões da biblioteca. Mudança relevante ganha uma seção
+nova, datada, no fim do arquivo. Se algo parecer errado ou incompleto,
+procure aqui o motivo antes de discordar.
+
+As duas primeiras seções nasceram no `docs/roadmap.md` do Kotonazo, onde a
+biblioteca foi decidida e construída. Desde 11/10/2026 elas moram aqui, e o
+Kotonazo é só um dos apps que usam a biblioteca.
+
+## O acesso vira biblioteca comum aos apps da Kogumelo (10/10/2026)
+
+**A decisão do operador:** a prova de identidade sai de cada jogo para uma biblioteca Go
+própria, em `~/Kogumelo/Ferramentas/acesso`, **pública desde o início** ("já fica do jeito
+certo"), em `github.com/Kogumelo/acesso`. Pública e não pasta solta porque o CI do Kotonazo e o
+`Dockerfile` do Zebra de Chapéu compilam longe do Mac e não enxergariam um caminho local; e
+privada pediria credencial do GitHub em cada lugar que compila. Não há segredo no código: as
+chaves dos provedores ficam no `.env` de cada app. Um serviço central de contas ("conta
+Kogumelo", com login único entre os jogos) foi considerado e descartado por ora: mais um sistema
+no ar, ida e volta entre domínios, e LGPD entre produtos.
+
+**O desenho, conversado:**
+
+- **Genérica por métodos.** Cada método — link mágico, Google, GitHub, Apple, login e senha — é
+  um jeito de provar quem a pessoa é, e todos devolvem a mesma coisa: provedor, identificador
+  fixo, e-mail e **se o e-mail é garantido**. Cada app liga os métodos que quer e os parametriza
+  (prazo do link, links por e-mail, regras de senha).
+- **A biblioteca prova; o app decide.** Conta, sessão, cookie e tela ficam em cada app: no
+  Kotonazo, a junção dos aparelhos anônimos; no Zebra, grupos e administrador. O envio do
+  e-mail também: a biblioteca pede "mande isto para tal endereço", e o app manda pelo SES dele.
+  A persistência (links emitidos, hash de senha) é uma interface que o app implementa nas
+  migrações dele; a biblioteca traz o SQL de referência em Postgres.
+- **Nasce com tudo que os dois jogos usam (revisto em 11/10).** O operador: "a biblioteca deve
+  ter google, link magico, GitHub e login/senha, para que já seja possível depois mudar o zebra
+  sem precisar voltar a mexer na biblioteca. E a biblioteca já deve ser 'esperta' para permitir,
+  rapidamente, incorporar outras identidades." Daí: link mágico e código de 6 dígitos como duas
+  apresentações da mesma prova por e-mail; senha em argon2id que **verifica bcrypt** (o Zebra
+  usa bcrypt) e avisa quando re-hashear; Google e GitHub com PKCE. Provedor novo entra como
+  configuração, se for OIDC (Google, Microsoft, gov.br), ou como um adaptador pequeno, se não
+  for (GitHub, Meta). Apple fica comportada no desenho e não implementada.
+- **gov.br não serve aos jogos.** O Login Único é integrado por serviços públicos; a notícia de
+  bancos "aderindo" é o caminho inverso (o banco como porta de entrada do gov.br). Não
+  confirmado na norma da Secretaria de Governo Digital, só na pesquisa de 11/10.
+- **Missões guardadas em 11/10:** `2c0dce5c` (a biblioteca), `d50b2be5` (o Kotonazo passa a
+  usá-la, com Google) e `398c0c10` (o Zebra migra e fecha o defeito abaixo), as duas últimas
+  esperando a primeira.
+- **Um defeito a não copiar.** O Zebra liga o login do Google a um usuário existente pelo
+  e-mail sem conferir `verified_email` (`oauth_service.go`, `getGoogleUser`; no GitHub ele
+  confere). A biblioteca expõe o "e-mail garantido" e não liga contas sem ele; o Zebra fecha o
+  defeito ao migrar.
+
+Nada disso foi construído naquela conversa: nem a pasta, nem o repositório.
+
+## A biblioteca de acesso existe: `github.com/Kogumelo/acesso` v0.1.0 (11/10/2026)
+
+A missão `2c0dce5c` construiu o que a seção de 10/10 desenhou, em
+`~/Kogumelo/Ferramentas/acesso`. O repositório é público e tem a tag `v0.1.0`.
+O Kotonazo não mudou. A troca do link mágico dele
+pela biblioteca é a missão `d50b2be5`, e a migração do Zebra é a `398c0c10`.
+
+**O que tem:**
+
+- `acesso.Identidade` é o resultado de todo método: provedor, ID fixo,
+  e-mail normalizado, `EmailGarantido`, nome, foto e `Extra`.
+- Os erros de recusa embrulham `acesso.ErrRecusado`. São eles
+  `ErrExpirado` e `ErrMuitasTentativas`. `ErrMuitosPedidos` fica à parte,
+  porque é limite e não recusa.
+- `email`: uma prova, duas formas (link de 32 bytes, código de 6 dígitos) e
+  três finalidades (`Entrar`, `Confirmar`, `Redefinir`). Os padrões vêm do
+  Kotonazo e do Zebra:
+  - 15 minutos de prazo;
+  - 3 mensagens por endereço em 15 minutos, somando links e códigos;
+  - teto de 6 tentativas por código.
+  
+  Um código novo derruba o anterior. Saem da biblioteca o `Carteiro`
+  (o app manda o e-mail) e a `Guarda` (o app guarda só o hash).
+  `email/emailteste.Contrato` confere qualquer Guarda.
+- `senha`: argon2id (19 MiB, t=2, p=1). Ela confere `$2a$`, `$2b$` e `$2y$`
+  e devolve `trocar=true`. `Senhas.Entrar` regrava pela Guarda. Login
+  inexistente confere contra um hash falso. A medida no Mac deu 18,5 ms com
+  usuário e 18,3 ms sem. `HashFalso` serve para o período em que o Zebra
+  ainda tem mais bcrypt que argon2id. As regras de força dão `*senha.Fraca`
+  com o nome da regra quebrada.
+- `provedor`:
+  - `NovoOIDC` só por configuração, pela descoberta;
+  - adaptador `OAuth2` com uma função `Traduzir`;
+  - `NovoGoogle` e `NovoGitHub`;
+  - state, PKCE S256 e nonce;
+  - id_token conferido pelo JWKS (RS256 e ES256, nunca `none`/HS*);
+  - sem `access_type=offline`, token no cabeçalho, 10 s e 1 MiB por
+    resposta, `Pendente` com 10 minutos.
+  
+  A Apple cabe sem mexer no núcleo: `SegredoDinamico`, `ModoDeResposta`,
+  `Traduzir` e `Reivindicacoes.Verdade` para `email_verified` em texto.
+  `TestOIDCComoAApple` prova isso contra um provedor falso. Falta só o
+  gerador do JWT ES256 com a chave `.p8`.
+- `pgacesso`: a Guarda de referência com pgx e o `esquema.sql`, com as
+  tabelas `acesso_prova` e `acesso_senha`. O limite é atômico por
+  `pg_advisory_xact_lock` no endereço. O contrato inteiro passou contra um
+  Postgres 17 descartável.
+- O núcleo importa só a biblioteca padrão, `x/oauth2` e `x/crypto`.
+  `TestFronteira` reprova o contrário. Um módulo de fora que importou
+  `v0.1.0` não herdou o pgx no `go.mod`. O `go.mod` pede Go 1.25, o mesmo
+  que o Kotonazo e o Zebra.
+
+**O que ficou pendente:**
+
+- **O CI não subiu.** O token do `gh` neste Mac não tem o escopo `workflow`,
+  e o GitHub recusa `.github/workflows/teste.yml` sem ele. O arquivo existe
+  em `~/Kogumelo/Ferramentas/acesso/.github/workflows/teste.yml`, fora do
+  git. Ele roda gofmt, vet e `go test -race` com um Postgres de serviço. Para
+  subir: `gh auth refresh -s workflow`, depois commit e push.
+- **A tag `v0.1.0` aponta para o commit `3f4fa2f`, que não está na `main`.**
+  A tag subiu antes de o push da `main` ser recusado pelo workflow. A `main`
+  (`4f59082`) é o mesmo commit sem o arquivo de CI. O código das duas é
+  idêntico, e `git diff` mostra só `teste.yml`. Mover a tag pedia push
+  forçado, que está fora do alcance das missões. Como importar funciona, a
+  tag ficou. A próxima versão (`v0.1.1`) sai da `main` já com o CI.
+- **Licença:** MIT, com copyright em nome da Kogumelo Informática Ltda. A
+  decisão é do operador, em 11/10. A licença ficou com a empresa porque o
+  código serve aos produtos dela, mora na organização dela no GitHub e é
+  commitado com o e-mail dela. Entrou no commit `b58fef4`, depois da tag
+  `v0.1.0`; a próxima tag já a leva.
+- **Fora de escopo:** Meta, Apple e gov.br. O README mostra como cada um
+  entraria.
+
+## A biblioteca passa a ter casa própria (11/10/2026)
+
+O operador queria a missão `2c0dce5c` criada no projeto Acesso desde o
+início. Ela foi criada no Kotonazo. O código não sofreu com isso: foi escrito
+direto aqui, na `main`. Mas a memória das decisões ficou no roadmap do
+Kotonazo, e a sala do Acesso não tinha branch nenhuma para mostrar. Por isso
+as duas seções acima vieram para este arquivo, e no Kotonazo ficou só um
+apontador. Nas palavras do operador: "o Kotonazo vai ser usuário, não dono
+da ferramenta".
+
+A partir daqui:
+
+- Mudança na biblioteca é missão do projeto Acesso.
+- Adotar a biblioteca é missão de cada app: `d50b2be5` no Kotonazo,
+  `398c0c10` no Zebra.
