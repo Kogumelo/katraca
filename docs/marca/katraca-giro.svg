@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">
   <!-- Logo da Katraca com o giro: o rotor da um terco de volta (120 graus) em
-       torno do cubo e para. Como os tres bracos sao iguais, o K se remonta.
+       torno do cubo e para. Como os tres bracos sao iguais, o K se remonta e
+       nenhum braco toca o poste: a fresta fica aberta o tempo todo.
        1,1 s girando, 2,1 s parado. Quem pede menos movimento ve o logo parado. -->
   <style>
-    .rotor{transform-box:view-box;transform-origin:56px 50px;animation:passo 3.2s cubic-bezier(.6,0,.2,1) infinite}
+    .rotor{transform-box:view-box;transform-origin:64px 50px;animation:passo 3.2s cubic-bezier(.6,0,.2,1) infinite}
     @keyframes passo{0%,50%{transform:rotate(0)}85%,100%{transform:rotate(120deg)}}
     @media (prefers-reduced-motion:reduce){.rotor{animation:none}}
   </style>
@@ -13,12 +14,13 @@
     </linearGradient>
   </defs>
   <rect x="8" y="8" width="84" height="84" rx="19" fill="url(#placa)"/>
-  <rect x="34" y="22" width="10" height="56" rx="2" fill="#fff"/>
+  <rect x="17" y="22" width="15" height="56" rx="2" fill="#fff"/>
+  <rect x="21" y="29" width="7" height="3" rx="1.5" fill="#1a7349"/>
   <g class="rotor" fill="#fff">
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(180 56 50)"/>
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(-60 56 50)"/>
-    <rect x="56" y="45" width="36" height="10" rx="2" transform="rotate(60 56 50)"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(180 64 50)"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(-60 64 50)"/>
+    <rect x="64" y="45" width="30" height="10" rx="2" transform="rotate(60 64 50)"/>
   </g>
-  <circle cx="56" cy="50" r="10.5" fill="#fff"/>
-  <circle cx="56" cy="50" r="4" fill="#1a7349"/>
+  <circle cx="64" cy="50" r="10.5" fill="#fff"/>
+  <circle cx="64" cy="50" r="4" fill="#1a7349"/>
 </svg>

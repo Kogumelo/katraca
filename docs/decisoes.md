@@ -291,3 +291,22 @@ Ficaram de fora a roda de catraca de bicicleta, o sinal `⊢` da lógica e uma
 catraca sem braço, que foram as outras direções estudadas. O cartão de
 compartilhamento do GitHub (1280×640) não foi feito: ele sobe à mão nas
 configurações do repositório.
+
+## O logo ganha a fresta (11/10/2026)
+
+O poste se afastou do rotor para que o braço de trás virasse a barreira da
+catraca, `| -O-`. O braço não atravessa mais o poste: ele para a 2 dele, e
+essa fresta é a passagem.
+
+- **Poste de 15, com a fenda do leitor de cartão.** Ele deixa de ter a
+  espessura dos braços (10), ao contrário do que dizia a seção anterior, e
+  passa a ler como o gabinete da catraca.
+- **Braços de 30, cubo em 64.** Os três continuam iguais, então o giro de um
+  terço de volta remonta o K e nenhum braço encosta no poste.
+- **O desenho de 16 px não mudou.** Em 16 px a fresta de 2 ocuparia 0,3 px;
+  `katraca-16.svg` segue com o rotor K anterior, por decisão do dono.
+
+As medidas saíram de uma bancada com fresta, espessura do poste, comprimento
+dos braços e fenda reguláveis. Ficaram de fora o braço encostado no poste, o
+gabinete grosso como direção própria e a borda da placa fazendo o papel do
+poste.
