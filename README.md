@@ -1,389 +1,433 @@
-<img src="docs/marca/katraca-giro.svg" width="96" height="96" alt="Logo da Katraca: um K branco sobre placa verde, formado pelo poste e pelos três braços de uma catraca">
+<img src="docs/marca/katraca-giro.svg" width="96" height="96" alt="Katraca logo: a white K on a green plate, made of the post and the three arms of a turnstile">
 
 # Katraca
 
-Katraca vem de catraca: ela confere quem a pessoa é; quem libera a passagem é o app.
+**English** · [Português](README.pt-BR.md)
 
-Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
-(Kotonazo, Zebra de Chapéu e os que vierem).
+Katraca comes from *catraca*, Portuguese for turnstile: it checks who the
+person is; the app is the one that lets them through.
+
+A Go library that **proves who a person is**, shared by Kogumelo's apps
+(Kotonazo, Zebra de Chapéu and the ones to come).
 
 ```sh
-go get github.com/Kogumelo/katraca@v0.6.0
+go get github.com/Kogumelo/katraca@v0.7.0
 ```
 
-## O que ela faz e o que fica no app
+Code, comments and error strings are in English. Messages for the person
+signing in come in English and Portuguese through package
+[`i18n`](#messages-for-the-person-i18n).
 
-**A biblioteca prova; o app decide.** Todo método termina na mesma
-`katraca.Identidade`:
+## What it does and what stays in the app
 
-| Campo            | O que é                                                                 |
-|------------------|-------------------------------------------------------------------------|
-| `Provedor`       | `"email"`, `"senha"`, `"google"`, `"github"` ou o nome que você der      |
-| `ID`             | identificador fixo no provedor: `sub` do OIDC, número da conta GitHub, e-mail normalizado na prova por e-mail, login na senha |
-| `Email`          | e-mail informado, normalizado (minúsculas); pode vir vazio              |
-| `EmailGarantido` | o provedor atesta que a pessoa controla esse e-mail                      |
-| `Nome`, `Foto`   | cosméticos; podem vir vazios                                             |
-| `Extra`          | o que um provedor tem de próprio (`login` do GitHub, por exemplo)       |
+**The library proves; the app decides.** Every method ends in the same
+`katraca.Identity`:
 
-| Fica na biblioteca                                  | Fica no app                                   |
+| Field             | What it is                                                              |
+|-------------------|-------------------------------------------------------------------------|
+| `Provider`        | `"email"`, `"password"`, `"google"`, `"github"` or the name you give    |
+| `ID`              | fixed identifier at the provider: OIDC `sub`, GitHub account number, normalized address in the email proof, login in the password |
+| `Email`           | reported address, normalized (lowercase); may be empty                  |
+| `EmailVerified`   | the provider vouches that the person controls that address              |
+| `Name`, `Picture` | cosmetic; may be empty                                                  |
+| `Extra`           | what is specific to a provider (GitHub's `login`, for example)          |
+
+| Stays in the library                                | Stays in the app                              |
 |-----------------------------------------------------|-----------------------------------------------|
-| gerar e conferir tokens, códigos e hashes           | conta, sessão, cookie, tela                   |
-| prazo, uso único, limite por e-mail, teto de tentativas | **juntar contas** (e com que regra)        |
-| state, PKCE, nonce, conferência do id_token         | guardar o `Pendente` entre a ida e a volta    |
-| argon2id, bcrypt legado, regras de força            | onde o hash mora (a `Guarda`)                 |
-| pedir "mande isto para tal endereço"                | mandar o e-mail (SES, SMTP), com o texto e o remetente dele |
+| generating and checking tokens, codes and hashes    | account, session, cookie, screen              |
+| expiry, single use, per-address limit, attempt limit | **linking accounts** (and by which rule)     |
+| state, PKCE, nonce, id_token verification           | keeping the `Pending` between leaving and coming back |
+| argon2id, legacy bcrypt, strength rules             | where the hash lives (the `Store`)            |
+| asking "send this to that address"                  | sending the email (SES, SMTP), with its own text and sender |
 
-A biblioteca não liga conta nenhuma. Ela não tem tabela de usuários e não sabe
-o que é uma.
+The library links no account. It has no users table and does not know what
+one is.
 
-### A regra que o app não pode quebrar
+### The rule the app must not break
 
-**Não ligue uma identidade a uma conta existente pelo e-mail sem
-`EmailGarantido`.** Sem ele, o e-mail é só uma declaração: alguém cria no
-Google (ou no GitHub, ou num provedor qualquer) uma conta com o e-mail de
-outra pessoa e, se o app juntar pelo e-mail, entra na conta dela.
+**Do not link an identity to an existing account by email without
+`EmailVerified`.** Without it, the address is only a claim: someone creates
+an account at Google (or GitHub, or any provider) with someone else's
+address and, if the app links by email, gets into that person's account.
 
-- Google: `EmailGarantido` é o `email_verified` do id_token. Uma conta Google
-  com e-mail de fora (não Gmail) pode vir com ele falso.
-- GitHub: é o `verified` do e-mail principal.
-- Prova por e-mail (link ou código): sempre verdadeiro, é isso que ela prova.
-- Senha: o que a `Guarda` do app disser. A senha sozinha não prova e-mail.
+- Google: `EmailVerified` is the id_token's `email_verified`. A Google
+  account with an outside address (not Gmail) may come with it false.
+- GitHub: it is the `verified` flag of the primary address.
+- Email proof (link or code): always true, that is what it proves.
+- Password: whatever the app's `Store` says. A password alone proves no
+  address.
 
-Com `EmailGarantido` falso, o app cria conta nova pelo par
-(`Provedor`, `ID`) ou pede uma prova por e-mail antes de juntar.
+With `EmailVerified` false, the app creates a new account by the
+(`Provider`, `ID`) pair or asks for an email proof before linking.
 
-`EmailGarantido` verdadeiro é condição necessária, não suficiente. Antes de
-juntar, confira também:
+`EmailVerified` true is necessary, not sufficient. Before linking, also
+check:
 
-- **A conta existente tem o e-mail garantido do lado dela?** Se a conta
-  nasceu com senha e um e-mail nunca confirmado, ela pode ter sido criada
-  por um atacante com o e-mail da vítima, à espera de que a vítima entre
-  pelo Google. Juntar entrega à vítima uma conta em que o atacante ainda
-  entra pela senha. Nesse caso, não junte; ou, ao juntar, derrube as
-  credenciais não confirmadas da conta.
-- **A conta já tem identidade desse provedor com outro `ID`?** Então é
-  outra pessoa com o mesmo e-mail (um domínio que trocou de dono e recriou
-  o Google Workspace, por exemplo). Não junte.
-- **O `ID` é único dentro de um emissor só.** Com `ConferirEmissor`
-  aceitando mais de um `iss` (Microsoft com vários inquilinos), ponha o
-  `iss` no ID em `Traduzir`, ou o `sub` de um inquilino pode coincidir com o
-  de outro.
+- **Does the existing account have its address verified on its side?** If
+  the account was born with a password and an address never confirmed, an
+  attacker may have created it with the victim's address, waiting for the
+  victim to sign in with Google. Linking hands the victim an account the
+  attacker can still enter with the password. In that case, don't link; or,
+  when linking, drop the account's unconfirmed credentials.
+- **Does the account already have an identity from this provider with
+  another `ID`?** Then it is another person with the same address (a domain
+  that changed hands and recreated its Google Workspace, for example). Don't
+  link.
+- **The `ID` is unique within a single issuer only.** With `AcceptIssuer`
+  accepting more than one `iss` (multi-tenant Microsoft), put the `iss` into
+  the ID in `Customize`, or one tenant's `sub` may collide with another's.
 
-### O que mais fica com o app
+### What else stays with the app
 
-- **Limite de tentativas na senha.** `Senhas.Entrar` não conta tentativas:
-  limite por login e por IP na rota. No código por e-mail a biblioteca já
-  limita por endereço (6 por código, 30 por dia); um limite por IP no
-  `ConferirCodigo` ainda ajuda contra quem chuta em muitos endereços.
-- **Não revele quem tem conta.** Responda igual a "mande o link" exista a
-  conta ou não, e na redefinição de senha mande a mensagem só se a conta
-  existir, com a mesma resposta nos dois casos. `ErrMuitosPedidos` vale para
-  qualquer endereço e não revela nada.
-- **Compile com o Go em dia.** O `go.mod` pede o mínimo (1.25); o
-  `govulncheck` acha na biblioteca padrão do 1.25.0 falhas em `net/http`,
-  `net/mail` e `crypto/tls` que a biblioteca chama. Use o último patch.
+- **Password attempt limits.** `Passwords.SignIn` does not count attempts:
+  limit per login and per IP on the route. For the email code the library
+  already limits per address (6 per code, 30 a day); a per-IP limit on
+  `VerifyCode` still helps against someone guessing across many addresses.
+- **Don't reveal who has an account.** Answer "send me the link" the same
+  way whether the account exists or not, and for password resets send the
+  message only if the account exists, with the same answer in both cases.
+  `ErrTooManyRequests` applies to any address and reveals nothing.
+- **Build with an up-to-date Go.** `go.mod` asks for the minimum (1.25);
+  `govulncheck` finds flaws in the 1.25.0 standard library in `net/http`,
+  `net/mail` and `crypto/tls` that the library calls. Use the latest patch.
 
-## Os métodos
+## The methods
 
-Cada app liga os que quer e parametriza. Os padrões estão entre parênteses.
+Each app enables the ones it wants and sets them up. Defaults are in
+parentheses.
 
-### Prova por e-mail: link e código (`email`)
+### Email proof: link and code (`email`)
 
-É uma prova só, com duas apresentações:
+It is a single proof with two presentations:
 
-- **Link** (`EnviarLink` / `ConferirLink`): token de 32 bytes num endereço.
-- **Código** (`EnviarCodigo` / `ConferirCodigo`): seis dígitos, com teto de
-  tentativas.
+- **Link** (`SendLink` / `VerifyLink`): a 32-byte token inside a URL.
+- **Code** (`SendCode` / `VerifyCode`): six digits, with an attempt limit.
 
-Ela serve a três finalidades: `email.Entrar`, `email.Confirmar` (cadastro) e
-`email.Redefinir` (senha). Uma prova emitida para uma finalidade não vale
-para outra.
+It serves three purposes: `email.SignIn`, `email.Confirm` (sign-up) and
+`email.Reset` (password). A proof issued for one purpose is not valid for
+another.
 
-- Prazo do link (15 min) e do código (15 min).
-- Limite por endereço: no máximo 3 mensagens em 15 min, somando links e
-  códigos de todas as finalidades.
-- Uso único. De dois cliques simultâneos, só um vence.
-- Teto de tentativas por código (6). Cada tentativa conta, certa ou errada.
-  Passado o teto, nem o código certo vale. Um código novo derruba o anterior.
-- Teto diário por endereço (30 tentativas em 24 horas, somando todos os
-  códigos). Sem ele, os 18 chutes a cada 15 minutos nunca acabariam. Passado
-  o teto, o código daquele endereço não vale até a janela andar; a pessoa
-  ainda entra pelo link ou por outro método.
-- A `Guarda` só vê o hash: `sha256` do token; no código, um HMAC-SHA256 de
-  `id:código` com a chave do app. A chave não mora no banco, e quem lê o
-  banco não acha o código testando o milhão de possibilidades.
-- **`Config.Chave` é obrigatória:** 32 bytes ou mais de `crypto/rand`, no
-  `.env` do app. Pode ser a mesma do `provedor.Selo`, porque cada uso deriva
-  a sua. Trocar a chave derruba os códigos ainda não usados (15 min).
+- Link expiry (15 min) and code expiry (15 min).
+- Per-address limit: at most 3 messages in 15 min, adding up links and codes
+  of every purpose.
+- Single use. Of two simultaneous clicks, only one wins.
+- Attempt limit per code (6). Every attempt counts, right or wrong. Past the
+  limit, not even the right code is valid. A new code voids the previous
+  one.
+- Daily limit per address (30 attempts in 24 hours, adding up every code).
+  Without it, the 18 guesses every 15 minutes would never end. Past the
+  limit, codes for that address are not valid until the window moves on;
+  the person can still sign in by link or another method.
+- The `Store` only sees the hash: `sha256` of the token; for the code, an
+  HMAC-SHA256 of `id:code` with the app key. The key does not live in the
+  database, and whoever reads the database cannot find the code by trying
+  the million possibilities.
+- **`Config.Key` is required:** 32 bytes or more from `crypto/rand`, in the
+  app's `.env`. It can be the same as the `provider.Sealer` key, since each
+  use derives its own. Changing the key voids the codes not yet used
+  (15 min).
 
 ```go
-prova, err := email.Nova(guarda, carteiro, email.Config{Chave: chave})
-err = prova.EnviarLink(ctx, "ana@exemplo.com", email.Entrar)
-// ... a pessoa clica; a tela manda o token por POST:
-id, err := prova.ConferirLink(ctx, token, email.Entrar)
+prover, err := email.New(store, mailer, email.Config{Key: key})
+err = prover.SendLink(ctx, "ana@example.com", email.SignIn)
+// ... the person clicks; the page sends the token by POST:
+id, err := prover.VerifyLink(ctx, token, email.SignIn)
 ```
 
-O `Carteiro` recebe uma `email.Mensagem` (`Para`, `Finalidade`, `Forma`,
-`Token` ou `Codigo`, `Expira`) e monta o e-mail. Duas recomendações do
+The `Mailer` receives an `email.Message` (`To`, `Purpose`, `Kind`, `Token`
+or `Code`, `Expires`) and builds the email. Two recommendations from
 Kotonazo:
 
-- Ponha o token no **fragmento** (`https://app/#entrar=TOKEN`), que não vai
-  a servidor nenhum, e confira por **POST**. Leitor de e-mail que "confere
-  links" abre GETs e gastaria o uso único.
-- Monte o endereço com a origem **configurada**, nunca com o `Host` do
-  pedido.
+- Put the token in the **fragment** (`https://app/#signin=TOKEN`), which
+  goes to no server, and check it by **POST**. Mail scanners that "check
+  links" open GETs and would use up the single use.
+- Build the URL from the **configured** origin, never from the request's
+  `Host`.
 
-### Senha (`senha`)
+### Password (`password`)
 
-- Hash novo em **argon2id**, formato PHC. O padrão é o mínimo da OWASP:
-  19 MiB, 2 passadas, 1 via.
-- **Confere bcrypt** (`$2a$`, `$2b$`, `$2y$`) e avisa que o hash deve ser
-  trocado. Avisa também quando um argon2id tem parâmetros abaixo dos atuais.
-  `Senhas.Entrar` faz a troca pela `Guarda`; quem usa
-  `Parametros.Conferir` direto recebe `trocar=true` e grava.
-- **Mesma latência com e sem usuário**: login inexistente confere a senha
-  contra um hash falso de mesmo custo. Durante a migração do bcrypt, quando a
-  maioria dos hashes ainda é bcrypt, ponha em `Senhas.HashFalso` um bcrypt do
-  mesmo custo.
-- **Tetos de custo na leitura:** hash argon2id acima de 256 MiB, 32
-  passadas ou 16 vias, ou bcrypt com custo acima de 15, dá
-  `ErrHashInvalido` sem ser calculado. Um hash absurdo no banco faria cada
-  tentativa naquela conta, de qualquer pessoa, prender o servidor. `Gerar`
-  recusa parâmetros acima dos mesmos tetos.
-- Regras de força parametrizáveis (`senha.Regras`): mínimo (8), máximo (128),
-  exigências de letra, número, maiúscula e símbolo (desligadas por padrão,
-  como recomenda o NIST), senhas proibidas e senha sem o login. O erro
-  `*senha.Fraca` diz a regra quebrada, para o app escrever a mensagem na
-  língua dele.
+- New hashes in **argon2id**, PHC format. The default is the OWASP minimum:
+  19 MiB, 2 iterations, parallelism 1.
+- **Verifies bcrypt** (`$2a$`, `$2b$`, `$2y$`) and flags that the hash should
+  be replaced. It also flags an argon2id with parameters below the current
+  ones. `Passwords.SignIn` does the replacement through the `Store`; whoever
+  calls `Params.Verify` directly gets `rehash=true` and stores the new hash.
+- **Same latency with and without a user**: an unknown login checks the
+  password against a dummy hash of the same cost. During a bcrypt migration,
+  while most hashes are still bcrypt, set `Passwords.DummyHash` to a bcrypt
+  hash of the same cost.
+- **Cost ceilings when reading:** an argon2id hash above 256 MiB, 32
+  iterations or parallelism 16, or bcrypt above cost 15, gives
+  `ErrInvalidHash` without being computed. An absurd hash in the database
+  would make every attempt on that account, by anyone, hang the server.
+  `Params.Hash` refuses parameters above the same ceilings.
+- Configurable strength rules (`password.Rules`): minimum (8), maximum
+  (128), requiring a letter, digit, uppercase letter and symbol (off by
+  default, as NIST recommends), forbidden passwords and no login inside the
+  password. The `*password.Weak` error tells which rule broke
+  (`password.RuleMinLength`, `password.RuleForbidden`...), and `i18n` writes
+  it in English or Portuguese.
 
 ```go
-s := &senha.Senhas{Guarda: guarda, Regras: senha.Regras{Minimo: 10}}
-hash, err := s.Gerar(senhaNova, login)              // cadastro / redefinição
-id, trocado, err := s.Entrar(ctx, login, senhaDigitada)
+p := &password.Passwords{Store: store, Rules: password.Rules{MinLength: 10}}
+hash, err := p.Hash(newPassword, login)              // sign-up / reset
+id, rehashed, err := p.SignIn(ctx, login, typedPassword)
 ```
 
-### Google, GitHub e outros provedores (`provedor`)
+### Google, GitHub and other providers (`provider`)
 
-Todo provedor tem duas metades:
+Every provider has two halves:
 
 ```go
-url, pend, err := p.Iniciar(ctx)           // guarde pend; redirecione para url
-id, err := p.Concluir(ctx, pend, r.Form)   // na volta
+url, pend, err := p.Begin(ctx)             // keep pend; redirect to url
+id, err := p.Complete(ctx, pend, r.Form)   // on the way back
 ```
 
-- `state` aleatório, conferido em tempo constante, antes de tudo: a recusa
-  do provedor (`ErroDoProvedor`) só vale com o state da ida.
-  `ErroDoProvedor.Descricao` é texto livre do provedor; não a mostre como
-  HTML.
-- **PKCE** S256 sempre, salvo `SemPKCE` para provedor que o recuse.
-- `nonce` em todo OIDC.
-- O userinfo completa o que falta no id_token, com o mesmo `sub`. O e-mail e
-  o `email_verified` vêm sempre da mesma fonte.
-- id_token conferido: assinatura pelo JWKS do emissor (RS256 ou ES256; nunca
-  `none` nem HS*), `iss`, `aud`/`azp`, `exp`, `iat` e nonce.
-- **Sem `access_type=offline`**: o login não precisa de refresh token.
-- Token de acesso no cabeçalho `Authorization`, nunca na URL.
-- Prazo (10 s) e limite de tamanho (1 MiB) em toda resposta de provedor.
-- O `Pendente` vence em 10 minutos.
+- Random `state`, checked in constant time, before anything else: the
+  provider's refusal (`ProviderError`) only counts with the outgoing state.
+  `ProviderError.Description` is free text from the provider; don't render
+  it as HTML.
+- **PKCE** S256 always, unless `DisablePKCE` for a provider that rejects it.
+- `nonce` on every OIDC flow.
+- The userinfo fills in what the id_token lacks, with the same `sub`. The
+  address and `email_verified` always come from the same source.
+- id_token verified: signature by the issuer's JWKS (RS256 or ES256; never
+  `none` or HS*), `iss`, `aud`/`azp`, `exp`, `iat` and nonce.
+- **No `access_type=offline`**: signing in needs no refresh token.
+- Access token in the `Authorization` header, never in the URL.
+- Timeout (10 s) and size limit (1 MiB) on every provider response.
+- The `Pending` expires in 10 minutes (`PendingTTL`).
 
-O `Pendente` é do app, e quem o tiver conclui o login no lugar da pessoa.
-Para guardá-lo no navegador, use o `provedor.Selo`, com a chave do app:
+The `Pending` belongs to the app, and whoever holds it completes the sign-in
+in the person's place. To keep it in the browser, use `provider.Sealer`,
+with the app key:
 
 ```go
-selo := &provedor.Selo{Chaves: [][]byte{chave}} // 32 bytes ou mais, de crypto/rand
+sealer := &provider.Sealer{Keys: [][]byte{key}} // 32 bytes or more, from crypto/rand
 
-// na ida:
-url, pend, err := p.Iniciar(ctx)
-err = selo.PlantarCookie(w, "/volta/", pend)
+// on the way out:
+url, pend, err := p.Begin(ctx)
+err = sealer.SetCookie(w, "/callback/", pend)
 http.Redirect(w, r, url, http.StatusFound)
 
-// na volta:
-pend, err := selo.LerCookie(w, r, "/volta/") // abre e apaga o cookie
-id, err := p.Concluir(ctx, pend, r.Form)
+// on the way back:
+pend, err := sealer.ReadCookie(w, r, "/callback/") // opens and deletes the cookie
+id, err := p.Complete(ctx, pend, r.Form)
 ```
 
-- O `Pendente` vai **cifrado e autenticado** (AES-256-GCM): o navegador não
-  lê o verificador PKCE nem o nonce, e não troca nada sem que a abertura
-  recuse.
-- O prazo vai dentro do selo, o mesmo `PrazoDoInicio` de `Concluir`.
-- Selo adulterado, de outra chave ou vencido dá erro que embrulha
-  `katraca.ErrRecusado`. Chave com menos de 32 bytes dá `ErrChaveCurta`.
-- O cookie (`katraca_pendente`) sai `HttpOnly`, `Secure`, `SameSite=Lax`,
-  restrito ao caminho da volta e com `MaxAge` até o fim do prazo.
-- **Troca de chave:** ponha a nova na frente, `Chaves: [][]byte{nova,
-  antiga}`. A primeira sela e todas abrem. Passados 10 minutos, tire a
-  antiga.
-- Quem não usa `net/http` direto chama `selo.Selar(pend)` e
-  `selo.Abrir(texto)` e guarda o texto onde quiser. No gin,
-  `c.Writer` e `c.Request` servem a `PlantarCookie` e `LerCookie`.
-- Volta por `form_post` (a Apple) é um POST de outro site, e o navegador não
-  manda cookie `SameSite=Lax` nele. Ali, plante o texto de `Selar` você
-  mesmo, num cookie `SameSite=None` e `Secure`.
+- The `Pending` goes **encrypted and authenticated** (AES-256-GCM): the
+  browser cannot read the PKCE verifier or the nonce, and cannot change
+  anything without the opening refusing it.
+- The expiry goes inside the seal, the same `PendingTTL` as `Complete`.
+- A tampered seal, one from another key or an expired one gives an error
+  that wraps `katraca.ErrRejected`. A key shorter than 32 bytes gives
+  `ErrShortKey`.
+- The cookie (`katraca_pending`) is `HttpOnly`, `Secure`, `SameSite=Lax`,
+  restricted to the callback path and with `MaxAge` until the expiry.
+- **Key rotation:** put the new key first, `Keys: [][]byte{newKey,
+  oldKey}`. The first one seals and all of them open. After 10 minutes,
+  remove the old one.
+- Without `net/http`, call `sealer.Seal(pend)` and `sealer.Open(text)` and
+  keep the text wherever you like. In gin, `c.Writer` and `c.Request` work
+  with `SetCookie` and `ReadCookie`.
+- A `form_post` callback (Apple) is a cross-site POST, and the browser does
+  not send `SameSite=Lax` cookies with it. There, set the text from `Seal`
+  yourself, in a `SameSite=None`, `Secure` cookie.
 
-O exemplo em [`exemplo/main.go`](exemplo/main.go) mostra o fluxo inteiro com
+The example in [`example/main.go`](example/main.go) shows the whole flow with
 `net/http`.
 
 ```go
-g, err := provedor.NovoGoogle(provedor.Google{ClienteID: ..., Segredo: ..., Retorno: ...})
-gh := provedor.NovoGitHub(provedor.GitHub{ClienteID: ..., Segredo: ..., Retorno: ...})
+g, err := provider.NewGoogle(provider.Google{ClientID: ..., ClientSecret: ..., RedirectURL: ...})
+gh := provider.NewGitHub(provider.GitHub{ClientID: ..., ClientSecret: ..., RedirectURL: ...})
 ```
 
-## Acrescentar um provedor
+## Messages for the person (`i18n`)
 
-Há dois caminhos, e nenhum mexe no núcleo.
-
-### 1. É OIDC? Só configuração
-
-Microsoft, Keycloak, Auth0, gov.br e o próprio Google são OIDC. A biblioteca
-lê o resto em `Emissor + /.well-known/openid-configuration`:
+The library returns errors; the screen belongs to the app. For those who
+don't want to write the messages, package `i18n` has a short text for each
+error, in English and Brazilian Portuguese:
 
 ```go
-ms, err := provedor.NovoOIDC(provedor.OIDCConfig{
-    Nome:      "microsoft",
-    Emissor:   "https://login.microsoftonline.com/consumers/v2.0",
-    ClienteID: os.Getenv("MICROSOFT_CLIENTE_ID"),
-    Segredo:   os.Getenv("MICROSOFT_SEGREDO"),
-    Retorno:   "https://app.exemplo/volta/microsoft",
+lang := i18n.Match(r.Header.Get("Accept-Language")) // i18n.English or i18n.Portuguese
+http.Error(w, i18n.Message(lang, err), http.StatusUnauthorized)
+```
+
+- `Message` covers `ErrRejected`, `ErrExpired`, `ErrTooManyAttempts`,
+  `ErrTooManyRequests`, `ErrInvalidEmail`, the provider's `access_denied`
+  refusal (the person cancelled) and every `*password.Weak` rule, with the
+  limit in the text ("Use at least 10 characters.").
+- Any other error (database down, misconfiguration) becomes "Something went
+  wrong", without details: those go to the log.
+- `ErrRejected` has a single text on purpose: the message does not tell
+  whether the login exists.
+- `Match` reads the `Accept-Language` header with its weights (`q=`); any
+  `pt` gives Portuguese, and everything else gives English.
+- `Text(lang, key)` returns a standalone text, such as
+  `i18n.KeyProviderUnavailable` when `Begin` fails.
+
+**Adding a language:** write a catalog like `i18n/pt_br.go`, register it in
+`catalogs` and `Languages`, and teach `Match` its tag.
+`TestCatalogsComplete` fails while any key is missing.
+
+## Adding a provider
+
+There are two paths, and neither touches the core.
+
+### 1. Is it OIDC? Configuration only
+
+Microsoft, Keycloak, Auth0, gov.br and Google itself are OIDC. The library
+reads the rest from `Issuer + /.well-known/openid-configuration`:
+
+```go
+ms, err := provider.NewOIDC(provider.OIDCConfig{
+    Name:         "microsoft",
+    Issuer:       "https://login.microsoftonline.com/consumers/v2.0",
+    ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
+    ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
+    RedirectURL:  "https://app.example/callback/microsoft",
 })
 ```
 
-Se o provedor foge do padrão, há ganchos sem código novo no núcleo:
+If the provider strays from the standard, there are hooks that need no new
+code in the core:
 
-- `ConferirEmissor`: aceita um `iss` diferente. A Microsoft com vários
-  inquilinos põe o inquilino da pessoa no `iss`.
-- `ParametrosExtra`: parâmetros no endereço de autorização (`prompt`, `hd`).
-- `ModoDeResposta`: `response_mode`, como o `form_post`.
-- `SegredoDinamico`: o segredo de cliente gerado a cada troca.
-- `Traduzir`: ajusta a `Identidade` com as claims e os parâmetros da volta.
-  Também pode recusar a volta.
+- `AcceptIssuer`: accepts a different `iss`. Multi-tenant Microsoft puts
+  the person's tenant in the `iss`.
+- `ExtraParams`: parameters on the authorization URL (`prompt`, `hd`).
+- `ResponseMode`: `response_mode`, such as `form_post`.
+- `ClientSecretFunc`: a client secret generated on every exchange.
+- `Customize`: adjusts the `Identity` with the claims and the callback
+  parameters. It can also reject the callback.
 
-### 2. Não é OIDC? Um adaptador OAuth2
+### 2. Not OIDC? An OAuth2 adapter
 
-GitHub e Meta não emitem id_token. O fluxo é o OAuth2 padrão, e o que muda é
-ler a pessoa na API, numa função `Traduzir`:
+GitHub and Meta issue no id_token. The flow is standard OAuth2, and what
+changes is reading the person from the API, in an `Identify` function:
 
 ```go
-meta := &provedor.OAuth2{
-    NomeDoProvedor: "meta",
-    ClienteID: ..., Segredo: ..., Retorno: ...,
-    Escopos:      []string{"email", "public_profile"},
-    AutorizarURL: "https://www.facebook.com/v21.0/dialog/oauth",
-    TokenURL:     "https://graph.facebook.com/v21.0/oauth/access_token",
-    Traduzir: func(ctx context.Context, api *provedor.API) (katraca.Identidade, error) {
+meta := &provider.OAuth2{
+    ProviderName: "meta",
+    ClientID: ..., ClientSecret: ..., RedirectURL: ...,
+    Scopes:   []string{"email", "public_profile"},
+    AuthURL:  "https://www.facebook.com/v21.0/dialog/oauth",
+    TokenURL: "https://graph.facebook.com/v21.0/oauth/access_token",
+    Identify: func(ctx context.Context, api *provider.API) (katraca.Identity, error) {
         var u struct{ ID, Name, Email string }
         if err := api.JSON(ctx, "https://graph.facebook.com/me?fields=id,name,email", &u); err != nil {
-            return katraca.Identidade{}, err
+            return katraca.Identity{}, err
         }
-        // A Meta não diz se o e-mail foi verificado: vai como não garantido.
-        return katraca.Identidade{ID: u.ID, Nome: u.Name, Email: u.Email}, nil
+        // Meta doesn't say whether the address was verified: it goes as unverified.
+        return katraca.Identity{ID: u.ID, Name: u.Name, Email: u.Email}, nil
     },
 }
 ```
 
-`api.JSON` já põe o token no cabeçalho e aplica o prazo e o limite de
-tamanho. [`provedor/github.go`](provedor/github.go) é um adaptador completo,
-com 70 linhas.
+`api.JSON` already puts the token in the header and applies the timeout and
+the size limit. [`provider/github.go`](provider/github.go) is a complete
+adapter, in 70 lines.
 
-### Apple: comportada, não implementada
+### Apple: supported, not implemented
 
-A Apple é OIDC com quatro exigências próprias, e todas cabem nos ganchos
-acima:
+Apple is OIDC with four requirements of its own, and all of them fit the
+hooks above:
 
-- O segredo de cliente é um JWT ES256 que vence: use `SegredoDinamico`.
-- A volta vem por POST: use `ModoDeResposta: "form_post"`. O app passa
-  `r.Form` a `Concluir`.
-- O nome vem só no primeiro login, no parâmetro `user`: leia-o em `Traduzir`
-  e guarde-o no app.
-- O e-mail pode ser de retransmissão (`@privaterelay.appleid.com`), e
-  `email_verified` chega como texto. `Reivindicacoes.Verdade` lê os dois
-  formatos.
+- The client secret is an ES256 JWT that expires: use `ClientSecretFunc`.
+- The callback comes by POST: use `ResponseMode: "form_post"`. The app
+  passes `r.Form` to `Complete`.
+- The name comes only on the first sign-in, in the `user` parameter: read
+  it in `Customize` and keep it in the app.
+- The address may be a relay (`@privaterelay.appleid.com`), and
+  `email_verified` arrives as text. `Claims.Bool` reads both formats.
 
-O teste `TestOIDCComoAApple` prova isso contra um provedor falso. Falta
-escrever o gerador do JWT ES256 com a chave `.p8`. Não foi feito porque ainda
-não há app que use a Apple.
+The `TestOIDCLikeApple` test proves this against a fake provider. What is
+missing is the generator for the ES256 JWT with the `.p8` key. It wasn't
+written because no app uses Apple yet.
 
-## Persistência: a `Guarda`
+## Persistence: the `Store`
 
-Cada método define a sua interface pequena, e o app a implementa sobre o
-banco e o driver que já usa:
+Each method defines its own small interface, and the app implements it on
+top of the database and driver it already uses:
 
-- `email.Guarda`: `Emitir`, `GastarLink`, `TentarCodigo`, `Gastar`. Cada
-  método é atômico, e é isso que sustenta o uso único e o limite sob
-  concorrência. `TentarCodigo` devolve também o total de tentativas do
-  endereço nas últimas 24 horas, para o teto diário.
-- `pgkatraca.Guarda.Limpar` apaga as provas vencidas. Rode uma vez por dia
-  com um corte de 24 horas atrás ou mais, ou o teto diário esquece
-  tentativas que ainda contam.
-- `senha.Guarda`: `Credencial`, `TrocarHash`.
+- `email.Store`: `Issue`, `ConsumeLink`, `AttemptCode`, `Consume`. Each
+  method is atomic, and that is what holds single use and the limit under
+  concurrency. `AttemptCode` also returns the address's total attempts in
+  the last 24 hours, for the daily limit.
+- `pgkatraca.Store.Purge` deletes expired proofs. Run it once a day with a
+  cutoff 24 hours ago or earlier, or the daily limit forgets attempts that
+  still count.
+- `password.Store`: `Credential`, `ReplaceHash`.
 
-Há duas implementações prontas:
+There are two ready implementations:
 
-- `email.NovaMemoria()`: para testes e protótipos.
-- `pgkatraca.Guarda`: referência em Postgres com **pgx**, com o SQL em
-  [`pgkatraca/esquema.sql`](pgkatraca/esquema.sql). É o único pacote que
-  importa pgx. Quem usa `lib/pq` ou `database/sql` escreve a sua Guarda
-  copiando o SQL.
+- `email.NewMemory()`: for tests and prototypes.
+- `pgkatraca.Store`: reference in Postgres with **pgx**, with the SQL in
+  [`pgkatraca/schema.sql`](pgkatraca/schema.sql). It is the only package
+  that imports pgx. Those using `lib/pq` or `database/sql` write their own
+  `Store` by copying the SQL.
 
-Quem escreve uma `email.Guarda` própria roda o contrato contra ela:
+Whoever writes their own `email.Store` runs the contract against it:
 
 ```go
-func TestMinhaGuarda(t *testing.T) {
-    emailteste.Contrato(t, func(*testing.T) email.Guarda { return minhaGuarda })
+func TestMyStore(t *testing.T) {
+    emailtest.Contract(t, func(*testing.T) email.Store { return myStore })
 }
 ```
 
-## Dependências
+## Dependencies
 
-O núcleo (`katraca`, `email`, `senha`, `provedor`) importa só três coisas:
+The core (`katraca`, `email`, `password`, `provider`, `i18n`) imports only
+three things:
 
-- a biblioteca padrão;
+- the standard library;
 - `golang.org/x/oauth2`;
 - `golang.org/x/crypto`.
 
-Nada de pgx, gin ou framework web. O `TestFronteira` reprova quem quebrar
-isso. O `go.mod` pede Go 1.25.
+No pgx, gin or web framework. `TestBoundary` fails whoever breaks this.
+`go.mod` asks for Go 1.25.
 
-## Testar
+## Testing
 
 ```sh
 go test ./...
-# com Postgres, para pgkatraca:
+# with Postgres, for pgkatraca:
 docker run -d --rm --name katraca-pg -e POSTGRES_PASSWORD=x -p 55432:5432 postgres:17-alpine
 KATRACA_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./...
 ```
 
-Os provedores são testados contra servidores falsos (`httptest`), com chaves
-RSA e EC geradas no teste. Os testes cobrem:
+Providers are tested against fake servers (`httptest`), with RSA and EC keys
+generated in the test. The tests cover:
 
-- `state` errado ou ausente;
-- selo do `Pendente` adulterado, de outra chave, vencido, com chave curta e
-  com troca de chave;
-- verificador PKCE de outra ida;
-- nonce, `aud`, `iss` e `exp` adulterados;
-- assinatura de outra chave;
-- e-mail não garantido;
-- resposta grande demais;
-- um provedor OIDC só por configuração;
-- um adaptador OAuth2 inventado;
-- alg trocado, RSA curta ou de expoente fraco, ES256 com `r`/`s` fora do
-  intervalo;
-- userinfo que tenta garantir o e-mail do id_token;
-- recusa do provedor sem `state`;
-- hash de senha com custo absurdo;
-- teto e uso único do código com tentativas simultâneas;
-- teto diário de tentativas por endereço;
-- hash do código que não sai do banco sem a chave do app.
+- wrong or missing `state`;
+- a `Pending` seal that is tampered, from another key, expired, with a short
+  key and with key rotation;
+- a PKCE verifier from another flow;
+- tampered nonce, `aud`, `iss` and `exp`;
+- a signature from another key;
+- unverified address;
+- an oversized response;
+- an OIDC provider by configuration alone;
+- a made-up OAuth2 adapter;
+- swapped alg, short RSA or weak exponent, ES256 with `r`/`s` out of range;
+- a userinfo that tries to verify the id_token's address;
+- a provider refusal without `state`;
+- a password hash with absurd cost;
+- the code's limit and single use under concurrent attempts;
+- the daily attempt limit per address;
+- a code hash that cannot be cracked from the database without the app key;
+- `i18n` catalogs complete in both languages.
 
-A revisão de segurança de 11/10/2026 está em
-[`docs/revisao-2026-10-11.md`](docs/revisao-2026-10-11.md).
+The security review of 2026-10-11 is in
+[`docs/revisao-2026-10-11.md`](docs/revisao-2026-10-11.md) (in Portuguese,
+with the names from before the English translation).
 
-## Segredos
+## Secrets
 
-Não há segredo neste repositório, nem haverá. As chaves dos provedores ficam
-no `.env` de cada app. Veja [`exemplo/.env.exemplo`](exemplo/.env.exemplo):
-as variáveis vêm vazias.
+There are no secrets in this repository, and there won't be. Provider keys
+live in each app's `.env`. See [`example/.env.example`](example/.env.example):
+the variables are empty.
 
-## Licença
+## License
 
-[MIT](LICENSE), © 2026 Kogumelo Informática Ltda. Use, copie e modifique à
-vontade, mantendo o aviso de copyright. O código vem sem garantia.
+[MIT](LICENSE), © 2026 Kogumelo Informática Ltda. Use, copy and modify
+freely, keeping the copyright notice. The code comes with no warranty.

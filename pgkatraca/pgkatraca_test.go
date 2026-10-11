@@ -10,79 +10,79 @@ import (
 
 	"github.com/Kogumelo/katraca"
 	"github.com/Kogumelo/katraca/email"
-	"github.com/Kogumelo/katraca/email/emailteste"
+	"github.com/Kogumelo/katraca/email/emailtest"
+	"github.com/Kogumelo/katraca/password"
 	"github.com/Kogumelo/katraca/pgkatraca"
-	"github.com/Kogumelo/katraca/senha"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Os testes daqui precisam de um Postgres descartavel:
+// The tests here need a throwaway Postgres:
 //
 //	KATRACA_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./pgkatraca/
 //
-// Sem a variavel, pulam.
-func guarda(t *testing.T) *pgkatraca.Guarda {
+// Without the variable, they are skipped.
+func store(t *testing.T) *pgkatraca.Store {
 	t.Helper()
 	u := os.Getenv("KATRACA_PG_URL")
 	if u == "" {
-		t.Skip("KATRACA_PG_URL vazia: sem Postgres para testar")
+		t.Skip("KATRACA_PG_URL is empty: no Postgres to test against")
 	}
 	pool, err := pgxpool.New(context.Background(), u)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	g := &pgkatraca.Guarda{Banco: pool}
-	if err := g.CriarTabelas(context.Background()); err != nil {
+	s := &pgkatraca.Store{DB: pool}
+	if err := s.CreateTables(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return g
+	return s
 }
 
-func TestContratoDaProva(t *testing.T) {
-	g := guarda(t)
-	emailteste.Contrato(t, func(*testing.T) email.Guarda { return g })
+func TestEmailProofContract(t *testing.T) {
+	s := store(t)
+	emailtest.Contract(t, func(*testing.T) email.Store { return s })
 }
 
-func TestSenhaNoBanco(t *testing.T) {
-	g := guarda(t)
+func TestPasswordInDB(t *testing.T) {
+	s := store(t)
 	ctx := context.Background()
 	login := "zebra." + strings.ReplaceAll(t.Name(), "/", ".")
-	b, _ := bcrypt.GenerateFromPassword([]byte("antiga-do-zebra"), bcrypt.MinCost)
-	if err := g.GravarSenha(ctx, login, string(b), senha.Credencial{Email: "z@x.com", EmailGarantido: true}); err != nil {
+	b, _ := bcrypt.GenerateFromPassword([]byte("zebra-old-one"), bcrypt.MinCost)
+	if err := s.SetPassword(ctx, login, string(b), password.Credential{Email: "z@x.com", EmailVerified: true}); err != nil {
 		t.Fatal(err)
 	}
-	s := &senha.Senhas{Guarda: g}
-	id, trocado, err := s.Entrar(ctx, login, "antiga-do-zebra")
-	if err != nil || !trocado || !id.EmailGarantido {
-		t.Fatalf("id=%+v trocado=%v err=%v", id, trocado, err)
+	p := &password.Passwords{Store: s}
+	id, rehashed, err := p.SignIn(ctx, login, "zebra-old-one")
+	if err != nil || !rehashed || !id.EmailVerified {
+		t.Fatalf("id=%+v rehashed=%v err=%v", id, rehashed, err)
 	}
-	c, _ := g.Credencial(ctx, login)
+	c, _ := s.Credential(ctx, login)
 	if !strings.HasPrefix(c.Hash, "$argon2id$") {
-		t.Fatalf("hash nao migrou: %s", c.Hash)
+		t.Fatalf("hash was not migrated: %s", c.Hash)
 	}
-	if _, _, err := s.Entrar(ctx, login+"-ninguem", "x"); !errors.Is(err, katraca.ErrRecusado) {
-		t.Fatalf("sem usuario: %v", err)
+	if _, _, err := p.SignIn(ctx, login+"-nobody", "x"); !errors.Is(err, katraca.ErrRejected) {
+		t.Fatalf("unknown user: %v", err)
 	}
 }
 
-// A troca do hash e compare-and-swap: se a senha foi redefinida entre a
-// leitura e a troca, o hash novo da redefinicao fica.
-func TestTrocarHashNaoAtropelaRedefinicao(t *testing.T) {
-	g := guarda(t)
+// Replacing the hash is a compare-and-swap: if the password was reset between
+// the read and the replacement, the new hash from the reset stays.
+func TestReplaceHashDoesNotOverwriteReset(t *testing.T) {
+	s := store(t)
 	ctx := context.Background()
 	login := "cas." + time.Now().Format("150405.000000000")
-	if err := g.GravarSenha(ctx, login, "$2a$04$antigo", senha.Credencial{}); err != nil {
+	if err := s.SetPassword(ctx, login, "$2a$04$old", password.Credential{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := g.GravarSenha(ctx, login, "$argon2id$redefinida", senha.Credencial{}); err != nil {
+	if err := s.SetPassword(ctx, login, "$argon2id$reset", password.Credential{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := g.TrocarHash(ctx, login, "$2a$04$antigo", "$argon2id$migrada"); err != nil {
+	if err := s.ReplaceHash(ctx, login, "$2a$04$old", "$argon2id$migrated"); err != nil {
 		t.Fatal(err)
 	}
-	if c, _ := g.Credencial(ctx, login); c.Hash != "$argon2id$redefinida" {
-		t.Fatalf("a migracao atropelou a redefinicao: %s", c.Hash)
+	if c, _ := s.Credential(ctx, login); c.Hash != "$argon2id$reset" {
+		t.Fatalf("the migration overwrote the reset: %s", c.Hash)
 	}
 }
