@@ -54,7 +54,9 @@ type Pendente struct {
 }
 
 // ErroDoProvedor e a recusa que o proprio provedor mandou na volta
-// (?error=access_denied, por exemplo). Embrulha katraca.ErrRecusado.
+// (?error=access_denied, por exemplo), ja com o state conferido. Embrulha
+// katraca.ErrRecusado. Descricao e texto livre do provedor: o app nao a
+// mostra como HTML.
 type ErroDoProvedor struct {
 	Codigo    string
 	Descricao string
@@ -81,8 +83,8 @@ func aleatorio() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// conferirVolta e a parte comum de Concluir: provedor, prazo, erro do
-// provedor, state e presenca do code.
+// conferirVolta e a parte comum de Concluir: provedor, prazo, state, erro do
+// provedor e presenca do code.
 func conferirVolta(nome string, pend Pendente, resposta url.Values, agora time.Time) (string, error) {
 	if pend.Provedor != nome || pend.Estado == "" {
 		return "", fmt.Errorf("%w: pendente de outro provedor", katraca.ErrRecusado)
@@ -90,11 +92,14 @@ func conferirVolta(nome string, pend Pendente, resposta url.Values, agora time.T
 	if agora.Sub(pend.Criado) > PrazoDoInicio || agora.Before(pend.Criado.Add(-time.Minute)) {
 		return "", katraca.ErrExpirado
 	}
-	if e := resposta.Get("error"); e != "" {
-		return "", &ErroDoProvedor{Codigo: e, Descricao: resposta.Get("error_description")}
-	}
+	// O state vem antes do erro: o provedor devolve o state tambem na recusa,
+	// e sem conferi-lo qualquer um poe na volta o error_description que
+	// quiser.
 	if subtle.ConstantTimeCompare([]byte(resposta.Get("state")), []byte(pend.Estado)) != 1 {
 		return "", fmt.Errorf("%w: state nao confere", katraca.ErrRecusado)
+	}
+	if e := resposta.Get("error"); e != "" {
+		return "", &ErroDoProvedor{Codigo: e, Descricao: resposta.Get("error_description")}
 	}
 	code := resposta.Get("code")
 	if code == "" {

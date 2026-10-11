@@ -8,7 +8,7 @@ Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
 (Kotonazo, Zebra de Chapéu e os que vierem).
 
 ```sh
-go get github.com/Kogumelo/katraca@v0.5.0
+go get github.com/Kogumelo/katraca@v0.5.1
 ```
 
 ## O que ela faz e o que fica no app
@@ -51,6 +51,37 @@ outra pessoa e, se o app juntar pelo e-mail, entra na conta dela.
 
 Com `EmailGarantido` falso, o app cria conta nova pelo par
 (`Provedor`, `ID`) ou pede uma prova por e-mail antes de juntar.
+
+`EmailGarantido` verdadeiro é condição necessária, não suficiente. Antes de
+juntar, confira também:
+
+- **A conta existente tem o e-mail garantido do lado dela?** Se a conta
+  nasceu com senha e um e-mail nunca confirmado, ela pode ter sido criada
+  por um atacante com o e-mail da vítima, à espera de que a vítima entre
+  pelo Google. Juntar entrega à vítima uma conta em que o atacante ainda
+  entra pela senha. Nesse caso, não junte; ou, ao juntar, derrube as
+  credenciais não confirmadas da conta.
+- **A conta já tem identidade desse provedor com outro `ID`?** Então é
+  outra pessoa com o mesmo e-mail (um domínio que trocou de dono e recriou
+  o Google Workspace, por exemplo). Não junte.
+- **O `ID` é único dentro de um emissor só.** Com `ConferirEmissor`
+  aceitando mais de um `iss` (Microsoft com vários inquilinos), ponha o
+  `iss` no ID em `Traduzir`, ou o `sub` de um inquilino pode coincidir com o
+  de outro.
+
+### O que mais fica com o app
+
+- **Limite de tentativas na senha.** `Senhas.Entrar` não conta tentativas:
+  limite por login e por IP na rota. Também no `ConferirCodigo`, por IP: o
+  teto por código e o limite de envios dão até 18 chutes a cada 15 minutos
+  por endereço, sem fim.
+- **Não revele quem tem conta.** Responda igual a "mande o link" exista a
+  conta ou não, e na redefinição de senha mande a mensagem só se a conta
+  existir, com a mesma resposta nos dois casos. `ErrMuitosPedidos` vale para
+  qualquer endereço e não revela nada.
+- **Compile com o Go em dia.** O `go.mod` pede o mínimo (1.25); o
+  `govulncheck` acha na biblioteca padrão do 1.25.0 falhas em `net/http`,
+  `net/mail` e `crypto/tls` que a biblioteca chama. Use o último patch.
 
 ## Os métodos
 
@@ -105,6 +136,11 @@ Kotonazo:
   contra um hash falso de mesmo custo. Durante a migração do bcrypt, quando a
   maioria dos hashes ainda é bcrypt, ponha em `Senhas.HashFalso` um bcrypt do
   mesmo custo.
+- **Tetos de custo na leitura:** hash argon2id acima de 256 MiB, 32
+  passadas ou 16 vias, ou bcrypt com custo acima de 15, dá
+  `ErrHashInvalido` sem ser calculado. Um hash absurdo no banco faria cada
+  tentativa naquela conta, de qualquer pessoa, prender o servidor. `Gerar`
+  recusa parâmetros acima dos mesmos tetos.
 - Regras de força parametrizáveis (`senha.Regras`): mínimo (8), máximo (128),
   exigências de letra, número, maiúscula e símbolo (desligadas por padrão,
   como recomenda o NIST), senhas proibidas e senha sem o login. O erro
@@ -126,9 +162,14 @@ url, pend, err := p.Iniciar(ctx)           // guarde pend; redirecione para url
 id, err := p.Concluir(ctx, pend, r.Form)   // na volta
 ```
 
-- `state` aleatório, conferido em tempo constante.
+- `state` aleatório, conferido em tempo constante, antes de tudo: a recusa
+  do provedor (`ErroDoProvedor`) só vale com o state da ida.
+  `ErroDoProvedor.Descricao` é texto livre do provedor; não a mostre como
+  HTML.
 - **PKCE** S256 sempre, salvo `SemPKCE` para provedor que o recuse.
 - `nonce` em todo OIDC.
+- O userinfo completa o que falta no id_token, com o mesmo `sub`. O e-mail e
+  o `email_verified` vêm sempre da mesma fonte.
 - id_token conferido: assinatura pelo JWKS do emissor (RS256 ou ES256; nunca
   `none` nem HS*), `iss`, `aud`/`azp`, `exp`, `iat` e nonce.
 - **Sem `access_type=offline`**: o login não precisa de refresh token.
@@ -310,7 +351,16 @@ RSA e EC geradas no teste. Os testes cobrem:
 - e-mail não garantido;
 - resposta grande demais;
 - um provedor OIDC só por configuração;
-- um adaptador OAuth2 inventado.
+- um adaptador OAuth2 inventado;
+- alg trocado, RSA curta ou de expoente fraco, ES256 com `r`/`s` fora do
+  intervalo;
+- userinfo que tenta garantir o e-mail do id_token;
+- recusa do provedor sem `state`;
+- hash de senha com custo absurdo;
+- teto e uso único do código com tentativas simultâneas.
+
+A revisão de segurança de 11/10/2026 está em
+[`docs/revisao-2026-10-11.md`](docs/revisao-2026-10-11.md).
 
 ## Segredos
 

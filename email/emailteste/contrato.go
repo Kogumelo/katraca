@@ -284,6 +284,60 @@ func Contrato(t *testing.T, nova func(t *testing.T) email.Guarda) {
 		}
 	})
 
+	t.Run("teto vale com tentativas simultaneas", func(t *testing.T) {
+		p, c, _ := montar(t)
+		ender := endereco(t)
+		if err := p.EnviarCodigo(ctx, ender, email.Entrar); err != nil {
+			t.Fatal(err)
+		}
+		certo := c.Ultima(t).Codigo
+		errado := "000000"
+		if certo == errado {
+			errado = "111111"
+		}
+		// Cada tentativa tem de ver a soma das outras: com contagem
+		// perdida, vinte chutes ao mesmo tempo passariam por seis.
+		var wg sync.WaitGroup
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				p.ConferirCodigo(ctx, ender, errado, email.Entrar)
+			}()
+		}
+		wg.Wait()
+		if _, err := p.ConferirCodigo(ctx, ender, certo, email.Entrar); !errors.Is(err, katraca.ErrMuitasTentativas) {
+			t.Fatalf("certo depois de 20 chutes simultaneos: quero ErrMuitasTentativas, veio %v", err)
+		}
+	})
+
+	t.Run("codigo certo simultaneo, um vence", func(t *testing.T) {
+		p, c, _ := montar(t)
+		ender := endereco(t)
+		if err := p.EnviarCodigo(ctx, ender, email.Entrar); err != nil {
+			t.Fatal(err)
+		}
+		cod := c.Ultima(t).Codigo
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		ok := 0
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := p.ConferirCodigo(ctx, ender, cod, email.Entrar); err == nil {
+					mu.Lock()
+					ok++
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+		if ok != 1 {
+			t.Fatalf("%d conferencias venceram; quero 1", ok)
+		}
+	})
+
 	t.Run("limite vale com pedidos simultaneos", func(t *testing.T) {
 		p, c, _ := montar(t)
 		ender := endereco(t)

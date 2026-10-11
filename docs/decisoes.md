@@ -353,3 +353,34 @@ O `exemplo/main.go` passa a usar o selo, com a chave em `SELO_CHAVE` no
 **A versão é a `v0.5.0`, não a `v0.2.0`** que o briefing pedia: a `v0.2.0`
 já existe (abandonada, sob o nome `acesso`) e a última publicada é a
 `v0.4.0`. Tag publicada não se move, e API nova sobe o número do meio.
+
+## A revisão de segurança fecha três brechas, e a versão é a `v0.5.1` (11/10/2026)
+
+Antes de o Kotonazo e o Zebra dependerem da biblioteca para o login, ela
+passou por uma revisão de quem não a escreveu. O relatório, achado por
+achado, está em [`revisao-2026-10-11.md`](revisao-2026-10-11.md). O que
+mudou no comportamento público:
+
+- **O userinfo não garante o e-mail do id_token.** O e-mail e o
+  `email_verified` vêm sempre da mesma fonte. Antes, um id_token com e-mail
+  e sem `email_verified` herdava o `email_verified` do userinfo, que fala do
+  e-mail do userinfo.
+- **O `state` é conferido antes do `error` da volta.** Recusa sem o
+  `state` da ida dá `ErrRecusado`, não `ErroDoProvedor`: ninguém de fora põe
+  texto na `Descricao`.
+- **Tetos de custo no hash de senha:** argon2id até 256 MiB, 32 passadas e
+  16 vias, sal e hash até 64 bytes; bcrypt até custo 15. Acima disso,
+  `ErrHashInvalido` sem calcular, e `Gerar` recusa. Antes, um hash plantado
+  no banco prendia o servidor a cada tentativa de login naquela conta.
+
+O README ganhou o que o app precisa saber além do `EmailGarantido`: o
+pré-sequestro de conta, o domínio que troca de dono, o `sub` por emissor, o
+limite de tentativas e a enumeração.
+
+**A versão é a `v0.5.1`**, e não a `v0.2.1` nem a `v0.3.0` que o briefing
+sugeria: essas são de quando o nome era outro, e a última publicada é a
+`v0.5.0`. São correções sem API nova, por isso sobe o último número.
+
+Ficaram com o operador, como pergunta no fim do relatório: a pimenta no
+hash do código, o teto de tentativas por endereço numa janela longa e o
+`govulncheck` no CI.

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Kogumelo/katraca"
 	"github.com/Kogumelo/katraca/email"
@@ -63,5 +64,25 @@ func TestSenhaNoBanco(t *testing.T) {
 	}
 	if _, _, err := s.Entrar(ctx, login+"-ninguem", "x"); !errors.Is(err, katraca.ErrRecusado) {
 		t.Fatalf("sem usuario: %v", err)
+	}
+}
+
+// A troca do hash e compare-and-swap: se a senha foi redefinida entre a
+// leitura e a troca, o hash novo da redefinicao fica.
+func TestTrocarHashNaoAtropelaRedefinicao(t *testing.T) {
+	g := guarda(t)
+	ctx := context.Background()
+	login := "cas." + time.Now().Format("150405.000000000")
+	if err := g.GravarSenha(ctx, login, "$2a$04$antigo", senha.Credencial{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.GravarSenha(ctx, login, "$argon2id$redefinida", senha.Credencial{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.TrocarHash(ctx, login, "$2a$04$antigo", "$argon2id$migrada"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := g.Credencial(ctx, login); c.Hash != "$argon2id$redefinida" {
+		t.Fatalf("a migracao atropelou a redefinicao: %s", c.Hash)
 	}
 }

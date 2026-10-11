@@ -202,3 +202,52 @@ func TestUserinfoCompletaOIDToken(t *testing.T) {
 		t.Fatalf("userinfo de outra pessoa entrou: %+v", id)
 	}
 }
+
+// O e-mail e o email_verified vem do mesmo lugar. Se o id_token traz o
+// e-mail sem dizer se e verificado, o email_verified do userinfo (que fala
+// de outro endereco) nao o garante.
+func TestUserinfoNaoGaranteEmailDoIDToken(t *testing.T) {
+	f := novoOIDCFalso(t, "RS256")
+	f.Claims = func(c map[string]any) { delete(c, "email_verified"); delete(c, "name") }
+	f.Userinfo = map[string]any{"sub": "1", "name": "Ana", "email": "outra@exemplo.com", "email_verified": true}
+	g := googleContra(t, f)
+	ctx := context.Background()
+	endereco, pend, _ := g.Iniciar(ctx)
+	id, err := g.Concluir(ctx, pend, f.autorizar(t, endereco, "1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.Email != "ana@exemplo.com" || id.EmailGarantido {
+		t.Fatalf("e-mail do id_token garantido pelo userinfo: %+v", id)
+	}
+
+	// Sem e-mail no id_token, o par inteiro vem do userinfo.
+	f.Claims = func(c map[string]any) { delete(c, "email"); delete(c, "email_verified") }
+	endereco, pend, _ = g.Iniciar(ctx)
+	id, err = g.Concluir(ctx, pend, f.autorizar(t, endereco, "1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.Email != "outra@exemplo.com" || !id.EmailGarantido {
+		t.Fatalf("par do userinfo nao veio: %+v", id)
+	}
+}
+
+// O erro do provedor so vale com o state da ida: sem ele, qualquer um manda
+// a pessoa para a volta com um texto escolhido em error_description.
+func TestRecusaDoProvedorSemState(t *testing.T) {
+	f := novoOIDCFalso(t, "RS256")
+	g := googleContra(t, f)
+	ctx := context.Background()
+	_, pend, _ := g.Iniciar(ctx)
+	volta := url.Values{"error": {"access_denied"}, "error_description": {"Sua conta foi bloqueada, ligue para 0800"}}
+	_, err := g.Concluir(ctx, pend, volta)
+	var ep *provedor.ErroDoProvedor
+	if errors.As(err, &ep) || !errors.Is(err, katraca.ErrRecusado) {
+		t.Fatalf("erro sem state virou ErroDoProvedor: %v", err)
+	}
+	volta.Set("state", "outro")
+	if _, err := g.Concluir(ctx, pend, volta); errors.As(err, &ep) {
+		t.Fatalf("erro com state errado virou ErroDoProvedor: %v", err)
+	}
+}

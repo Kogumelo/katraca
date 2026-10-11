@@ -206,3 +206,33 @@ func TestGerarConfereRegras(t *testing.T) {
 		t.Fatal("Gerar devia aplicar as regras")
 	}
 }
+
+// Um hash com parametros absurdos (gravado por quem alcancou o banco, ou
+// importado de outro sistema) nao prende o servidor: cada tentativa de login
+// naquela conta, de qualquer pessoa, rodaria o custo inteiro.
+func TestHashComCustoAbsurdo(t *testing.T) {
+	sal, h := "AAAAAAAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	casos := map[string]string{
+		"passadas":  "$argon2id$v=19$m=8,t=4000000000,p=1$" + sal + "$" + h,
+		"memoria":   "$argon2id$v=19$m=1048576,t=1,p=1$" + sal + "$" + h,
+		"vias":      "$argon2id$v=19$m=2048,t=1,p=255$" + sal + "$" + h,
+		"tamanho":   "$argon2id$v=19$m=8,t=1,p=1$" + sal + "$" + strings.Repeat("A", 1<<20),
+		"bcrypt 31": "$2a$31$" + strings.Repeat("A", 53),
+	}
+	for nome, hash := range casos {
+		pronto := make(chan error, 1)
+		go func() { _, _, err := senha.Padrao.Conferir(hash, "x"); pronto <- err }()
+		select {
+		case err := <-pronto:
+			if !errors.Is(err, senha.ErrHashInvalido) {
+				t.Errorf("%s: quero ErrHashInvalido, veio %v", nome, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Errorf("%s: conferencia passou de 3 s", nome)
+		}
+	}
+	// E Gerar nao produz hash que Conferir recusaria.
+	if _, err := (senha.Parametros{Passadas: 1000}).Gerar("x"); err == nil {
+		t.Error("Gerar aceitou parametros acima do teto")
+	}
+}

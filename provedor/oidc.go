@@ -228,12 +228,18 @@ func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values)
 	}
 
 	// O userinfo completa o que o id_token nao trouxe (o Google as vezes
-	// manda so o sub e o e-mail). O sub tem de ser o mesmo.
+	// manda so o sub e o e-mail). O sub tem de ser o mesmo. E-mail e
+	// email_verified andam juntos: o email_verified do userinfo fala do
+	// e-mail do userinfo, e nao garante o do id_token.
 	if d.UserinfoEndpoint != "" && (r.Texto("email") == "" || r.Texto("name") == "") {
 		var u Reivindicacoes
 		api := &API{Cliente: o.cfg.Cliente, Token: tok}
 		if err := api.JSON(ctx, d.UserinfoEndpoint, &u); err == nil && u.Texto("sub") == r.Texto("sub") {
+			_, temEmail := r["email"]
 			for k, v := range u {
+				if k == "email_verified" && temEmail {
+					continue
+				}
 				if _, ja := r[k]; !ja {
 					r[k] = v
 				}
