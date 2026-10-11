@@ -118,12 +118,12 @@ func novoOIDCFalso(t *testing.T, alg string) *oidcFalso {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"access_token": "acesso-" + p.sub, "token_type": "Bearer", "expires_in": 3600,
+			"access_token": "token-" + p.sub, "token_type": "Bearer", "expires_in": 3600,
 			"id_token": f.assinar(claims),
 		})
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer acesso-") {
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer token-") {
 			w.WriteHeader(401)
 			return
 		}

@@ -1,16 +1,18 @@
-# acesso
+# Kracha
+
+Kracha se lê crachá: diz quem a pessoa é; quem decide se ela entra é o app.
 
 Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
 (Kotonazo, Zebra de Chapéu e os que vierem).
 
 ```sh
-go get github.com/Kogumelo/acesso@v0.1.0
+go get github.com/Kogumelo/kracha@v0.2.0
 ```
 
 ## O que ela faz e o que fica no app
 
 **A biblioteca prova; o app decide.** Todo método termina na mesma
-`acesso.Identidade`:
+`kracha.Identidade`:
 
 | Campo            | O que é                                                                 |
 |------------------|-------------------------------------------------------------------------|
@@ -183,13 +185,13 @@ meta := &provedor.OAuth2{
     Escopos:      []string{"email", "public_profile"},
     AutorizarURL: "https://www.facebook.com/v21.0/dialog/oauth",
     TokenURL:     "https://graph.facebook.com/v21.0/oauth/access_token",
-    Traduzir: func(ctx context.Context, api *provedor.API) (acesso.Identidade, error) {
+    Traduzir: func(ctx context.Context, api *provedor.API) (kracha.Identidade, error) {
         var u struct{ ID, Name, Email string }
         if err := api.JSON(ctx, "https://graph.facebook.com/me?fields=id,name,email", &u); err != nil {
-            return acesso.Identidade{}, err
+            return kracha.Identidade{}, err
         }
         // A Meta não diz se o e-mail foi verificado: vai como não garantido.
-        return acesso.Identidade{ID: u.ID, Nome: u.Name, Email: u.Email}, nil
+        return kracha.Identidade{ID: u.ID, Nome: u.Name, Email: u.Email}, nil
     },
 }
 ```
@@ -229,8 +231,8 @@ banco e o driver que já usa:
 Há duas implementações prontas:
 
 - `email.NovaMemoria()`: para testes e protótipos.
-- `pgacesso.Guarda`: referência em Postgres com **pgx**, com o SQL em
-  [`pgacesso/esquema.sql`](pgacesso/esquema.sql). É o único pacote que
+- `pgkracha.Guarda`: referência em Postgres com **pgx**, com o SQL em
+  [`pgkracha/esquema.sql`](pgkracha/esquema.sql). É o único pacote que
   importa pgx. Quem usa `lib/pq` ou `database/sql` escreve a sua Guarda
   copiando o SQL.
 
@@ -244,7 +246,7 @@ func TestMinhaGuarda(t *testing.T) {
 
 ## Dependências
 
-O núcleo (`acesso`, `email`, `senha`, `provedor`) importa só três coisas:
+O núcleo (`kracha`, `email`, `senha`, `provedor`) importa só três coisas:
 
 - a biblioteca padrão;
 - `golang.org/x/oauth2`;
@@ -257,8 +259,8 @@ isso. O `go.mod` pede Go 1.25.
 
 ```sh
 go test ./...
-# com Postgres, para pgacesso:
-docker run -d --rm --name acesso-pg -e POSTGRES_PASSWORD=x -p 55432:5432 postgres:17-alpine
+# com Postgres, para pgkracha:
+docker run -d --rm --name kracha-pg -e POSTGRES_PASSWORD=x -p 55432:5432 postgres:17-alpine
 ACESSO_PG_URL=postgres://postgres:x@localhost:55432/postgres go test ./...
 ```
 

@@ -16,9 +16,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Kogumelo/acesso"
-	"github.com/Kogumelo/acesso/email"
-	"github.com/Kogumelo/acesso/provedor"
+	"github.com/Kogumelo/kracha"
+	"github.com/Kogumelo/kracha/email"
+	"github.com/Kogumelo/kracha/provedor"
 )
 
 func main() {
@@ -62,7 +62,7 @@ func main() {
 	mux.HandleFunc("POST /link", func(w http.ResponseWriter, r *http.Request) {
 		err := prova.EnviarLink(r.Context(), r.FormValue("email"), email.Entrar)
 		switch {
-		case errors.Is(err, acesso.ErrMuitosPedidos):
+		case errors.Is(err, kracha.ErrMuitosPedidos):
 			http.Error(w, "espere alguns minutos", http.StatusTooManyRequests)
 		case err != nil:
 			http.Error(w, "nao deu", http.StatusBadRequest)
@@ -109,8 +109,8 @@ func main() {
 
 // responder e onde o app decide. A regra que importa: so juntar com uma
 // conta existente pelo e-mail se EmailGarantido.
-func responder(w http.ResponseWriter, id acesso.Identidade, err error) {
-	if errors.Is(err, acesso.ErrRecusado) {
+func responder(w http.ResponseWriter, id kracha.Identidade, err error) {
+	if errors.Is(err, kracha.ErrRecusado) {
 		http.Error(w, "nao foi possivel entrar", http.StatusUnauthorized)
 		return
 	}

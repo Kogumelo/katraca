@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 	"golang.org/x/oauth2"
 )
 
@@ -45,7 +45,7 @@ type OIDCConfig struct {
 	// email_verified, name, picture), com as reivindicacoes do id_token e os
 	// parametros da volta. A Apple, por exemplo, manda o nome so no primeiro
 	// login, no parametro "user" do form_post.
-	Traduzir func(r Reivindicacoes, resposta url.Values, id *acesso.Identidade) error
+	Traduzir func(r Reivindicacoes, resposta url.Values, id *kracha.Identidade) error
 	Cliente  *http.Client // vazio vale ClientePadrao
 	Agora    func() time.Time
 }
@@ -159,7 +159,7 @@ func (o *OIDC) chave(ctx context.Context, d *descoberta, kid string) (crypto.Pub
 		k, ok = o.chaves[kid]
 	}
 	if !ok {
-		return nil, fmt.Errorf("%w: chave %q fora do jwks", acesso.ErrRecusado, kid)
+		return nil, fmt.Errorf("%w: chave %q fora do jwks", kracha.ErrRecusado, kid)
 	}
 	return k.publica()
 }
@@ -194,20 +194,20 @@ func (o *OIDC) Iniciar(ctx context.Context) (string, Pendente, error) {
 	return o.config(d).AuthCodeURL(pend.Estado, opts...), pend, nil
 }
 
-func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values) (acesso.Identidade, error) {
+func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values) (kracha.Identidade, error) {
 	agora := o.cfg.Agora()
 	code, err := conferirVolta(o.cfg.Nome, pend, resposta, agora)
 	if err != nil {
-		return acesso.Identidade{}, err
+		return kracha.Identidade{}, err
 	}
 	d, err := o.descobrir(ctx)
 	if err != nil {
-		return acesso.Identidade{}, err
+		return kracha.Identidade{}, err
 	}
 	cfg := o.config(d)
 	if o.cfg.SegredoDinamico != nil {
 		if cfg.ClientSecret, err = o.cfg.SegredoDinamico(ctx); err != nil {
-			return acesso.Identidade{}, fmt.Errorf("provedor %s: segredo: %w", o.cfg.Nome, err)
+			return kracha.Identidade{}, fmt.Errorf("provedor %s: segredo: %w", o.cfg.Nome, err)
 		}
 	}
 	var opts []oauth2.AuthCodeOption
@@ -216,15 +216,15 @@ func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values)
 	}
 	tok, err := cfg.Exchange(comCliente(ctx, o.cfg.Cliente), code, opts...)
 	if err != nil {
-		return acesso.Identidade{}, fmt.Errorf("%w: troca do code: %v", acesso.ErrRecusado, err)
+		return kracha.Identidade{}, fmt.Errorf("%w: troca do code: %v", kracha.ErrRecusado, err)
 	}
 	bruto, _ := tok.Extra("id_token").(string)
 	if bruto == "" {
-		return acesso.Identidade{}, fmt.Errorf("%w: resposta sem id_token", acesso.ErrRecusado)
+		return kracha.Identidade{}, fmt.Errorf("%w: resposta sem id_token", kracha.ErrRecusado)
 	}
 	r, err := o.conferirIDToken(ctx, d, bruto, pend.Nonce, agora)
 	if err != nil {
-		return acesso.Identidade{}, err
+		return kracha.Identidade{}, err
 	}
 
 	// O userinfo completa o que o id_token nao trouxe (o Google as vezes
@@ -241,23 +241,23 @@ func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values)
 		}
 	}
 
-	id := acesso.Identidade{
+	id := kracha.Identidade{
 		Provedor: o.cfg.Nome,
 		ID:       r.Texto("sub"),
 		Nome:     r.Texto("name"),
 		Foto:     r.Texto("picture"),
 	}
-	if e, err := acesso.NormalizarEmail(r.Texto("email")); err == nil {
+	if e, err := kracha.NormalizarEmail(r.Texto("email")); err == nil {
 		id.Email = e
 		id.EmailGarantido = r.Verdade("email_verified")
 	}
 	if o.cfg.Traduzir != nil {
 		if err := o.cfg.Traduzir(r, resposta, &id); err != nil {
-			return acesso.Identidade{}, err
+			return kracha.Identidade{}, err
 		}
 	}
 	if id.ID == "" {
-		return acesso.Identidade{}, fmt.Errorf("%w: id_token sem sub", acesso.ErrRecusado)
+		return kracha.Identidade{}, fmt.Errorf("%w: id_token sem sub", kracha.ErrRecusado)
 	}
 	if id.Email == "" {
 		id.EmailGarantido = false
@@ -267,7 +267,7 @@ func (o *OIDC) Concluir(ctx context.Context, pend Pendente, resposta url.Values)
 
 // conferirIDToken confere assinatura, emissor, audiencia, prazo e nonce.
 func (o *OIDC) conferirIDToken(ctx context.Context, d *descoberta, bruto, nonce string, agora time.Time) (Reivindicacoes, error) {
-	recusa := func(motivo string) error { return fmt.Errorf("%w: id_token %s", acesso.ErrRecusado, motivo) }
+	recusa := func(motivo string) error { return fmt.Errorf("%w: id_token %s", kracha.ErrRecusado, motivo) }
 	cab, corpo, ass, assinado, err := partirJWT(bruto)
 	if err != nil {
 		return nil, recusa(err.Error())

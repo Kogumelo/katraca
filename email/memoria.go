@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Kogumelo/acesso"
+	"github.com/Kogumelo/kracha"
 )
 
 // Memoria e uma Guarda em memoria, para testes e prototipos. Some quando o
@@ -34,7 +34,7 @@ func (m *Memoria) Emitir(_ context.Context, e Emissao, maximo int, desde time.Ti
 		}
 	}
 	if n >= maximo {
-		return acesso.ErrMuitosPedidos
+		return kracha.ErrMuitosPedidos
 	}
 	if e.Forma == Codigo {
 		for _, x := range m.emissoes {
