@@ -1,21 +1,23 @@
-// Package email prova que a pessoa le uma caixa de correio. A prova e uma so,
-// com duas apresentacoes:
+// Package email proves that the person reads a mailbox. There is a single
+// proof, in two forms:
 //
-//   - Link: um token longo vai dentro de um endereco; quem clica, prova.
-//   - Codigo: seis digitos que a pessoa digita; curto, entao tem teto de
-//     tentativas.
+//   - Link: a long token goes inside a URL; whoever clicks it proves it.
+//   - Code: six digits the person types; short, so it has an attempt
+//     limit.
 //
-// E serve a tres finalidades: entrar, confirmar um cadastro e redefinir a
-// senha. Uma prova emitida para uma finalidade nao vale para outra.
+// And it serves three purposes: signing in, confirming a sign-up and
+// resetting the password. A proof issued for one purpose is not valid for
+// another.
 //
-// A biblioteca nao manda e-mail: ela entrega a Mensagem ao Carteiro do app,
-// que monta o texto, o endereco do link e o remetente. Nem guarda nada: a
-// Guarda e do app (ha uma de referencia em pgkatraca). Do segredo, a Guarda so
-// ve o hash.
+// The library does not send email: it hands the Message to the app's Mailer,
+// which builds the text, the link URL and the sender. Nor does it store
+// anything: the Store belongs to the app (there is a reference one in
+// pgkatraca). Of the secret, the Store only sees the hash.
 package email
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -30,252 +32,290 @@ import (
 	"github.com/Kogumelo/katraca"
 )
 
-// Finalidade e para que a prova foi pedida.
-type Finalidade string
+// Purpose is what the proof was requested for.
+type Purpose string
 
 const (
-	Entrar    Finalidade = "entrar"
-	Confirmar Finalidade = "confirmar"
-	Redefinir Finalidade = "redefinir"
+	SignIn  Purpose = "sign_in"
+	Confirm Purpose = "confirm"
+	Reset   Purpose = "reset"
 )
 
-// Forma e a apresentacao da prova.
-type Forma string
+// Kind is the form the proof takes.
+type Kind string
 
 const (
-	Link   Forma = "link"
-	Codigo Forma = "codigo"
+	Link Kind = "link"
+	Code Kind = "code"
 )
 
-// Emissao e uma prova emitida, como a Guarda a ve. Sem o segredo: so o hash.
-type Emissao struct {
-	ID         string // aleatorio, gerado aqui
-	Email      string // normalizado
-	Finalidade Finalidade
-	Forma      Forma
-	Hash       []byte // sha256 do token; no codigo, sha256(ID ":" codigo)
-	Criada     time.Time
-	Expira     time.Time
-	Tentativas int // so no codigo; a Guarda a incrementa em TentarCodigo
+// Issuance is an issued proof, as the Store sees it. No secret: only the hash.
+type Issuance struct {
+	ID       string // random, generated here
+	Email    string // normalized
+	Purpose  Purpose
+	Kind     Kind
+	Hash     []byte // sha256 of the token; for a code, HMAC-SHA256 with the app key of ID ":" code
+	Created  time.Time
+	Expires  time.Time
+	Attempts int // codes only; the Store increments it in AttemptCode
 }
 
-// ErrNaoHa e o que a Guarda devolve quando nao ha emissao viva que sirva.
-var ErrNaoHa = errors.New("email: nenhuma emissao viva")
+// ErrNotFound is what the Store returns when there is no live issuance that fits.
+var ErrNotFound = errors.New("email: no live issuance")
 
-// Guarda persiste as emissoes. Cada metodo e atomico: e isso que faz o uso
-// unico e o teto valerem com dois pedidos ao mesmo tempo.
-type Guarda interface {
-	// Emitir guarda e. Antes, conta as emissoes do mesmo e-mail criadas
-	// depois de desde (qualquer forma e finalidade, usadas ou nao); se ja
-	// forem maximo, nao guarda e devolve katraca.ErrMuitosPedidos. Contar e
-	// guardar nao se separam. Se e.Forma for Codigo, os codigos ainda nao
-	// usados do mesmo e-mail e finalidade deixam de valer.
-	Emitir(ctx context.Context, e Emissao, maximo int, desde time.Time) error
+// MinKeySize is the smallest size, in bytes, accepted for Config.Key.
+const MinKeySize = 32
 
-	// GastarLink marca como usado o link de hash e finalidade dados, se ainda
-	// nao foi, e o devolve — vencido ou nao; o prazo a biblioteca confere.
-	// Sem link por usar: ErrNaoHa.
-	GastarLink(ctx context.Context, hash []byte, f Finalidade) (Emissao, error)
+// ErrShortKey is a configuration error: Config.Key empty or shorter than
+// MinKeySize bytes.
+var ErrShortKey = fmt.Errorf("email: Config.Key needs %d bytes or more", MinKeySize)
 
-	// TentarCodigo soma uma tentativa ao codigo mais recente ainda nao usado
-	// do e-mail e finalidade, e o devolve ja com a soma. Sem codigo: ErrNaoHa.
-	TentarCodigo(ctx context.Context, email string, f Finalidade) (Emissao, error)
+// DailyLimitWindow is the window of Config.DailyLimit.
+const DailyLimitWindow = 24 * time.Hour
 
-	// Gastar marca como usada a emissao id, se ainda nao foi. Devolve false se
-	// outro pedido a gastou antes.
-	Gastar(ctx context.Context, id string) (bool, error)
+// Store persists issuances. Each method is atomic: that is what makes single
+// use and the limits hold with two requests at the same time.
+type Store interface {
+	// Issue stores e. First it counts the issuances for the same email
+	// created after since (any kind and purpose, used or not); if there are
+	// already max, it does not store and returns katraca.ErrTooManyRequests.
+	// Counting and storing are not separated. If e.Kind is Code, the unused
+	// codes for the same email and purpose stop being valid.
+	Issue(ctx context.Context, e Issuance, max int, since time.Time) error
+
+	// ConsumeLink marks as used the link with the given hash and purpose, if
+	// it was not yet, and returns it — expired or not; the library checks
+	// the deadline. No unused link: ErrNotFound.
+	ConsumeLink(ctx context.Context, hash []byte, p Purpose) (Issuance, error)
+
+	// AttemptCode adds one attempt to the most recent unused code for the
+	// email and purpose, and returns it with the attempt already added. It
+	// also returns the total attempts, including this one, of the codes for
+	// the same email (any purpose, used or not) created after since. Adding
+	// and counting are not separated. No code: ErrNotFound.
+	AttemptCode(ctx context.Context, email string, p Purpose, since time.Time) (Issuance, int, error)
+
+	// Consume marks issuance id as used, if it was not yet. It returns false
+	// if another request consumed it first.
+	Consume(ctx context.Context, id string) (bool, error)
 }
 
-// Mensagem e o que o Carteiro manda. Token vem preenchido no Link, Codigo no
-// Codigo. O app monta o endereco do link (de preferencia com o token no
-// fragmento, "#", que nao vai a servidor nenhum) e o texto.
-type Mensagem struct {
-	Para       string
-	Finalidade Finalidade
-	Forma      Forma
-	Token      string // base64url, 43 caracteres
-	Codigo     string // seis digitos
-	Expira     time.Time
+// Message is what the Mailer sends. Token is filled for Link, Code for
+// Code. The app builds the link URL (preferably with the token in the
+// fragment, "#", which never reaches any server) and the text.
+type Message struct {
+	To      string
+	Purpose Purpose
+	Kind    Kind
+	Token   string // base64url, 43 characters
+	Code    string // six digits
+	Expires time.Time
 }
 
-// Carteiro entrega a Mensagem. E do app: SES, SMTP, o que for.
-type Carteiro interface {
-	Enviar(ctx context.Context, m Mensagem) error
+// Mailer delivers the Message. It belongs to the app: SES, SMTP, whatever.
+type Mailer interface {
+	Send(ctx context.Context, m Message) error
 }
 
-// CarteiroFunc deixa uma funcao servir de Carteiro.
-type CarteiroFunc func(ctx context.Context, m Mensagem) error
+// MailerFunc lets a function serve as a Mailer.
+type MailerFunc func(ctx context.Context, m Message) error
 
-func (f CarteiroFunc) Enviar(ctx context.Context, m Mensagem) error { return f(ctx, m) }
+func (f MailerFunc) Send(ctx context.Context, m Message) error { return f(ctx, m) }
 
-// Config parametriza a prova. O zero de cada campo vale o padrao ao lado.
+// Config configures the proof. The zero value of each field means the
+// default next to it.
 type Config struct {
-	PrazoDoLink   time.Duration // 15 min
-	PrazoDoCodigo time.Duration // 15 min
-	// MaximoPorJanela mensagens por e-mail dentro de Janela, somando links e
-	// codigos de todas as finalidades. Sem limite, a rota vira um jeito de
-	// encher a caixa de alguem — e cada mensagem gasta a reputacao do dominio.
-	MaximoPorJanela int           // 3
-	Janela          time.Duration // 15 min
-	// TetoDeTentativas por codigo. Seis digitos sao um milhao de
-	// possibilidades; com 6 tentativas por codigo e 3 codigos por janela, a
-	// chance de acertar no chute e de 18 em um milhao a cada 15 minutos.
-	TetoDeTentativas int // 6
-	// Agora substitui o relogio, para teste.
-	Agora func() time.Time
+	LinkTTL time.Duration // 15 min
+	CodeTTL time.Duration // 15 min
+	// MaxPerWindow messages per email within Window, adding up links and
+	// codes of all purposes. Without a limit, the route becomes a way to
+	// flood someone's mailbox — and each message spends the domain's
+	// reputation.
+	MaxPerWindow int           // 3
+	Window       time.Duration // 15 min
+	// MaxAttempts per code. Six digits are a million possibilities; with 6
+	// attempts per code and 3 codes per window, the chance of guessing right
+	// is 18 in a million every 15 minutes.
+	MaxAttempts int // 6
+	// DailyLimit of code attempts per email in DailyLimitWindow, adding up
+	// all codes and purposes. Without it, the 18 guesses every 15 minutes
+	// never end: about a 5% chance of a hit in a month. Past the limit, not
+	// even the right code is valid until the window moves on.
+	DailyLimit int // 30
+	// Key of the app, required: 32 bytes or more from crypto/rand. It goes
+	// into the code hash, and without it whoever reads the database finds
+	// the live code by trying the million codes. It may be the same as the
+	// provider.Sealer's: each use derives its own. Changing the key drops
+	// the unused codes.
+	Key []byte
+	// Now replaces the clock, for tests.
+	Now func() time.Time
 }
 
-// Prova e a prova por e-mail configurada.
-type Prova struct {
-	guarda   Guarda
-	carteiro Carteiro
-	cfg      Config
+// Prover is the configured email proof.
+type Prover struct {
+	store  Store
+	mailer Mailer
+	cfg    Config
+	key    []byte // the code key, derived from cfg.Key
 }
 
-// Nova monta a prova. Guarda e Carteiro sao obrigatorios.
-func Nova(g Guarda, c Carteiro, cfg Config) (*Prova, error) {
-	if g == nil || c == nil {
-		return nil, errors.New("email: Guarda e Carteiro sao obrigatorios")
+// New builds the prover. Store, Mailer and Config.Key are required.
+func New(s Store, m Mailer, cfg Config) (*Prover, error) {
+	if s == nil || m == nil {
+		return nil, errors.New("email: Store and Mailer are required")
 	}
-	if cfg.PrazoDoLink <= 0 {
-		cfg.PrazoDoLink = 15 * time.Minute
+	if len(cfg.Key) < MinKeySize {
+		return nil, ErrShortKey
 	}
-	if cfg.PrazoDoCodigo <= 0 {
-		cfg.PrazoDoCodigo = 15 * time.Minute
+	if cfg.LinkTTL <= 0 {
+		cfg.LinkTTL = 15 * time.Minute
 	}
-	if cfg.MaximoPorJanela <= 0 {
-		cfg.MaximoPorJanela = 3
+	if cfg.CodeTTL <= 0 {
+		cfg.CodeTTL = 15 * time.Minute
 	}
-	if cfg.Janela <= 0 {
-		cfg.Janela = 15 * time.Minute
+	if cfg.MaxPerWindow <= 0 {
+		cfg.MaxPerWindow = 3
 	}
-	if cfg.TetoDeTentativas <= 0 {
-		cfg.TetoDeTentativas = 6
+	if cfg.Window <= 0 {
+		cfg.Window = 15 * time.Minute
 	}
-	if cfg.Agora == nil {
-		cfg.Agora = time.Now
+	if cfg.MaxAttempts <= 0 {
+		cfg.MaxAttempts = 6
 	}
-	return &Prova{guarda: g, carteiro: c, cfg: cfg}, nil
+	if cfg.DailyLimit <= 0 {
+		cfg.DailyLimit = 30
+	}
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	h := hmac.New(sha256.New, cfg.Key)
+	h.Write([]byte("katraca/email/code/k1"))
+	return &Prover{store: s, mailer: m, cfg: cfg, key: h.Sum(nil)}, nil
 }
 
-func finalidadeValida(f Finalidade) bool {
-	return f == Entrar || f == Confirmar || f == Redefinir
+func validPurpose(p Purpose) bool {
+	return p == SignIn || p == Confirm || p == Reset
 }
 
-// EnviarLink emite um link para o endereco e o entrega ao Carteiro.
-func (p *Prova) EnviarLink(ctx context.Context, endereco string, f Finalidade) error {
-	return p.enviar(ctx, endereco, f, Link)
+// SendLink issues a link for the address and hands it to the Mailer.
+func (p *Prover) SendLink(ctx context.Context, address string, purpose Purpose) error {
+	return p.send(ctx, address, purpose, Link)
 }
 
-// EnviarCodigo emite um codigo de seis digitos e o entrega ao Carteiro. O
-// codigo anterior do mesmo endereco e finalidade deixa de valer.
-func (p *Prova) EnviarCodigo(ctx context.Context, endereco string, f Finalidade) error {
-	return p.enviar(ctx, endereco, f, Codigo)
+// SendCode issues a six-digit code and hands it to the Mailer. The previous
+// code for the same address and purpose stops being valid.
+func (p *Prover) SendCode(ctx context.Context, address string, purpose Purpose) error {
+	return p.send(ctx, address, purpose, Code)
 }
 
-func (p *Prova) enviar(ctx context.Context, endereco string, f Finalidade, forma Forma) error {
-	if !finalidadeValida(f) {
-		return fmt.Errorf("email: finalidade desconhecida %q", f)
+func (p *Prover) send(ctx context.Context, address string, purpose Purpose, kind Kind) error {
+	if !validPurpose(purpose) {
+		return fmt.Errorf("email: unknown purpose %q", purpose)
 	}
-	addr, err := katraca.NormalizarEmail(endereco)
+	addr, err := katraca.NormalizeEmail(address)
 	if err != nil {
 		return err
 	}
-	agora := p.cfg.Agora()
-	e := Emissao{ID: idNovo(), Email: addr, Finalidade: f, Forma: forma, Criada: agora}
-	m := Mensagem{Para: addr, Finalidade: f, Forma: forma}
-	if forma == Link {
-		bruto := make([]byte, 32)
-		rand.Read(bruto)
-		m.Token = base64.RawURLEncoding.EncodeToString(bruto)
-		h := sha256.Sum256(bruto)
+	now := p.cfg.Now()
+	e := Issuance{ID: newID(), Email: addr, Purpose: purpose, Kind: kind, Created: now}
+	m := Message{To: addr, Purpose: purpose, Kind: kind}
+	if kind == Link {
+		raw := make([]byte, 32)
+		rand.Read(raw)
+		m.Token = base64.RawURLEncoding.EncodeToString(raw)
+		h := sha256.Sum256(raw)
 		e.Hash = h[:]
-		e.Expira = agora.Add(p.cfg.PrazoDoLink)
+		e.Expires = now.Add(p.cfg.LinkTTL)
 	} else {
-		m.Codigo = codigoNovo()
-		e.Hash = hashDoCodigo(e.ID, m.Codigo)
-		e.Expira = agora.Add(p.cfg.PrazoDoCodigo)
+		m.Code = newCode()
+		e.Hash = p.codeHash(e.ID, m.Code)
+		e.Expires = now.Add(p.cfg.CodeTTL)
 	}
-	m.Expira = e.Expira
-	if err := p.guarda.Emitir(ctx, e, p.cfg.MaximoPorJanela, agora.Add(-p.cfg.Janela)); err != nil {
+	m.Expires = e.Expires
+	if err := p.store.Issue(ctx, e, p.cfg.MaxPerWindow, now.Add(-p.cfg.Window)); err != nil {
 		return err
 	}
-	return p.carteiro.Enviar(ctx, m)
+	return p.mailer.Send(ctx, m)
 }
 
-// ConferirLink gasta o token e devolve a identidade do endereco. O token so
-// vale uma vez, so para a finalidade em que foi emitido e so dentro do prazo.
+// VerifyLink consumes the token and returns the identity of the address. The
+// token is valid only once, only for the purpose it was issued for and only
+// before it expires.
 //
-// Receba o token por POST, nunca por GET: leitor de e-mail que "confere
-// links" abre GETs, e gastaria o uso unico antes da pessoa.
-func (p *Prova) ConferirLink(ctx context.Context, token string, f Finalidade) (katraca.Identidade, error) {
-	bruto, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(token))
-	if err != nil || len(bruto) != 32 {
-		return katraca.Identidade{}, katraca.ErrRecusado
+// Receive the token by POST, never by GET: email scanners that "check
+// links" open GETs, and would use up the single use before the person.
+func (p *Prover) VerifyLink(ctx context.Context, token string, purpose Purpose) (katraca.Identity, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(token))
+	if err != nil || len(raw) != 32 {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	h := sha256.Sum256(bruto)
-	e, err := p.guarda.GastarLink(ctx, h[:], f)
-	if errors.Is(err, ErrNaoHa) {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	h := sha256.Sum256(raw)
+	e, err := p.store.ConsumeLink(ctx, h[:], purpose)
+	if errors.Is(err, ErrNotFound) {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
 	if err != nil {
-		return katraca.Identidade{}, err
+		return katraca.Identity{}, err
 	}
-	if e.Finalidade != f || e.Forma != Link {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	if e.Purpose != purpose || e.Kind != Link {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	if !p.cfg.Agora().Before(e.Expira) {
-		return katraca.Identidade{}, katraca.ErrExpirado
+	if !p.cfg.Now().Before(e.Expires) {
+		return katraca.Identity{}, katraca.ErrExpired
 	}
-	return identidade(e.Email), nil
+	return identity(e.Email), nil
 }
 
-// ConferirCodigo confere o codigo digitado para o endereco. Cada chamada gasta
-// uma tentativa, certa ou errada; passado o teto, nem o codigo certo vale.
-func (p *Prova) ConferirCodigo(ctx context.Context, endereco, codigo string, f Finalidade) (katraca.Identidade, error) {
-	addr, err := katraca.NormalizarEmail(endereco)
+// VerifyCode checks the code typed for the address. Each call uses up one
+// attempt, right or wrong; past the code's limit or the address's daily
+// limit, not even the right code is valid.
+func (p *Prover) VerifyCode(ctx context.Context, address, code string, purpose Purpose) (katraca.Identity, error) {
+	addr, err := katraca.NormalizeEmail(address)
 	if err != nil {
-		return katraca.Identidade{}, katraca.ErrRecusado
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	codigo = limparCodigo(codigo)
-	if len(codigo) != 6 {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	code = cleanCode(code)
+	if len(code) != 6 {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	e, err := p.guarda.TentarCodigo(ctx, addr, f)
-	if errors.Is(err, ErrNaoHa) {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	now := p.cfg.Now()
+	e, today, err := p.store.AttemptCode(ctx, addr, purpose, now.Add(-DailyLimitWindow))
+	if errors.Is(err, ErrNotFound) {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
 	if err != nil {
-		return katraca.Identidade{}, err
+		return katraca.Identity{}, err
 	}
-	if e.Finalidade != f || e.Forma != Codigo || e.Email != addr {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	if e.Purpose != purpose || e.Kind != Code || e.Email != addr {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	if e.Tentativas > p.cfg.TetoDeTentativas {
-		return katraca.Identidade{}, katraca.ErrMuitasTentativas
+	if e.Attempts > p.cfg.MaxAttempts || today > p.cfg.DailyLimit {
+		return katraca.Identity{}, katraca.ErrTooManyAttempts
 	}
-	if !p.cfg.Agora().Before(e.Expira) {
-		return katraca.Identidade{}, katraca.ErrExpirado
+	if !now.Before(e.Expires) {
+		return katraca.Identity{}, katraca.ErrExpired
 	}
-	if subtle.ConstantTimeCompare(e.Hash, hashDoCodigo(e.ID, codigo)) != 1 {
-		return katraca.Identidade{}, katraca.ErrRecusado
+	if subtle.ConstantTimeCompare(e.Hash, p.codeHash(e.ID, code)) != 1 {
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	ok, err := p.guarda.Gastar(ctx, e.ID)
+	ok, err := p.store.Consume(ctx, e.ID)
 	if err != nil {
-		return katraca.Identidade{}, err
+		return katraca.Identity{}, err
 	}
 	if !ok {
-		return katraca.Identidade{}, katraca.ErrRecusado
+		return katraca.Identity{}, katraca.ErrRejected
 	}
-	return identidade(addr), nil
+	return identity(addr), nil
 }
 
-func identidade(addr string) katraca.Identidade {
-	return katraca.Identidade{Provedor: "email", ID: addr, Email: addr, EmailGarantido: true}
+func identity(addr string) katraca.Identity {
+	return katraca.Identity{Provider: "email", ID: addr, Email: addr, EmailVerified: true}
 }
 
-// limparCodigo tira espacos e hifens que a pessoa digite ou cole ("123 456").
-func limparCodigo(c string) string {
+// cleanCode strips spaces and hyphens the person types or pastes ("123 456").
+func cleanCode(c string) string {
 	var b strings.Builder
 	for _, r := range c {
 		switch {
@@ -289,22 +329,25 @@ func limparCodigo(c string) string {
 	return b.String()
 }
 
-// hashDoCodigo prende o codigo a emissao: o mesmo codigo em duas emissoes da
-// hashes diferentes, e uma tabela pronta do milhao de hashes nao serve.
-func hashDoCodigo(id, codigo string) []byte {
-	h := sha256.Sum256([]byte(id + ":" + codigo))
-	return h[:]
+// codeHash binds the code to the issuance and to the app key. The id makes
+// the same code in two issuances yield different hashes; the key, which does
+// not live in the database, keeps whoever reads the database from trying the
+// million codes against the hash.
+func (p *Prover) codeHash(id, code string) []byte {
+	m := hmac.New(sha256.New, p.key)
+	m.Write([]byte(id + ":" + code))
+	return m.Sum(nil)
 }
 
-func codigoNovo() string {
+func newCode() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
-		panic(err) // crypto/rand nao falha desde o Go 1.24
+		panic(err) // crypto/rand does not fail since Go 1.24
 	}
 	return fmt.Sprintf("%06d", n.Int64())
 }
 
-func idNovo() string {
+func newID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)

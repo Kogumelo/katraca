@@ -353,3 +353,115 @@ O `exemplo/main.go` passa a usar o selo, com a chave em `SELO_CHAVE` no
 **A versão é a `v0.5.0`, não a `v0.2.0`** que o briefing pedia: a `v0.2.0`
 já existe (abandonada, sob o nome `acesso`) e a última publicada é a
 `v0.4.0`. Tag publicada não se move, e API nova sobe o número do meio.
+
+## A revisão de segurança fecha três brechas, e a versão é a `v0.5.1` (11/10/2026)
+
+Antes de o Kotonazo e o Zebra dependerem da biblioteca para o login, ela
+passou por uma revisão de quem não a escreveu. O relatório, achado por
+achado, está em [`revisao-2026-10-11.md`](revisao-2026-10-11.md). O que
+mudou no comportamento público:
+
+- **O userinfo não garante o e-mail do id_token.** O e-mail e o
+  `email_verified` vêm sempre da mesma fonte. Antes, um id_token com e-mail
+  e sem `email_verified` herdava o `email_verified` do userinfo, que fala do
+  e-mail do userinfo.
+- **O `state` é conferido antes do `error` da volta.** Recusa sem o
+  `state` da ida dá `ErrRecusado`, não `ErroDoProvedor`: ninguém de fora põe
+  texto na `Descricao`.
+- **Tetos de custo no hash de senha:** argon2id até 256 MiB, 32 passadas e
+  16 vias, sal e hash até 64 bytes; bcrypt até custo 15. Acima disso,
+  `ErrHashInvalido` sem calcular, e `Gerar` recusa. Antes, um hash plantado
+  no banco prendia o servidor a cada tentativa de login naquela conta.
+
+O README ganhou o que o app precisa saber além do `EmailGarantido`: o
+pré-sequestro de conta, o domínio que troca de dono, o `sub` por emissor, o
+limite de tentativas e a enumeração.
+
+**A versão é a `v0.5.1`**, e não a `v0.2.1` nem a `v0.3.0` que o briefing
+sugeria: essas são de quando o nome era outro, e a última publicada é a
+`v0.5.0`. São correções sem API nova, por isso sobe o último número.
+
+Ficaram com o operador, como pergunta no fim do relatório: a pimenta no
+hash do código, o teto de tentativas por endereço numa janela longa e o
+`govulncheck` no CI.
+
+## O código por e-mail ganha chave e teto diário, e a versão é a `v0.6.0` (11/10/2026)
+
+O operador respondeu às três perguntas da revisão aceitando as
+recomendações. Detalhes e testes estão no fim de
+[`revisao-2026-10-11.md`](revisao-2026-10-11.md).
+
+- **`email.Config.Chave` é obrigatória** (32 bytes ou mais). O hash do
+  código passa a ser um HMAC-SHA256 com uma chave derivada dela. Antes, quem
+  lesse o banco testava o milhão de códigos contra `sha256(id:código)` em
+  milissegundos e achava o código vivo. A chave pode ser a mesma do
+  `provedor.Selo`, porque cada uso deriva a sua. Sem ela, `email.Nova` dá
+  `email.ErrChaveCurta`.
+- **Teto diário por endereço:** `email.Config.TetoDiario` (30 tentativas
+  de código em 24 horas, somando códigos e finalidades). Para isso,
+  `email.Guarda.TentarCodigo` recebe o início da janela e devolve também o
+  total nela. `pgkatraca` soma e conta numa transação, sob a trava por
+  endereço. `Limpar` precisa de um corte de 24 horas atrás ou mais.
+- **`govulncheck` no CI, só avisando:** um trabalho à parte, com o Go
+  estável mais novo e `continue-on-error`.
+- O exemplo passa a ler a chave de `KATRACA_CHAVE`, que serve ao código e
+  ao selo.
+
+**A versão é a `v0.6.0`:** muda a interface da `email.Guarda` e a `Config`
+exige um campo novo. Com o número do meio abaixo de 1, quebrar sobe o
+número do meio. Nenhum app usa a biblioteca ainda.
+
+## O código passa para o inglês, a tela ganha `i18n`, e a versão é a `v0.7.0` (11/10/2026)
+
+O repositório é público, e o operador pediu tudo o que é de programação em
+inglês, com os textos de interface em inglês e português, como foi feito no
+Kandela no mesmo dia.
+
+- **Em inglês:** identificadores exportados e internos, comentários,
+  mensagens de erro (`"katraca: proof rejected"`), testes, SQL, CI e
+  variáveis de ambiente do exemplo. A API inteira mudou de nome; o
+  glossário está no próprio diff, e o README mostra o uso de cada parte.
+- **Pacotes e arquivos:** `senha` virou `password`, `provedor` virou
+  `provider`, `email/emailteste` virou `email/emailtest`, `exemplo` virou
+  `example`, `esquema.sql` virou `schema.sql`, `fronteira_test.go` virou
+  `boundary_test.go` e o CI passou a `test.yml`. Tudo por `git mv`.
+- **Nomes que pesam no uso:** `Identidade` virou `Identity`,
+  `EmailGarantido` virou `EmailVerified`, `ErrRecusado` virou `ErrRejected`,
+  a `Guarda` virou `Store`, o `Carteiro` virou `Mailer`, `Iniciar`/`Concluir`
+  viraram `Begin`/`Complete` e o `Selo` virou `Sealer`.
+- **Mudam dados, não só nomes**, todos sem migração, porque nenhum app usa
+  a biblioteca ainda:
+  - `Identity.Provider` da senha: `"senha"` virou `"password"`;
+  - finalidades `sign_in`, `confirm` e `reset`, formas `link` e `code`;
+  - regras de `password.Weak`: `min_length`, `max_length`, `letter`,
+    `digit`, `upper`, `symbol`, `forbidden` e `login`, agora com o tipo
+    `password.Rule`;
+  - tabelas `katraca_proof` e `katraca_password`, com colunas em inglês
+    (`purpose`, `kind`, `created_at`, `email_verified`...);
+  - cookie `katraca_pending` e os rótulos das chaves derivadas
+    (`katraca/provider/seal/k1`, `katraca/email/code/k1`). Selos e códigos
+    emitidos antes da troca deixam de abrir; vivem 10 e 15 minutos.
+  - As tags JSON do `Pending` dentro do selo não mudaram.
+- **O pacote `i18n` é novo e opcional.** `Message(lang, err)` escreve o erro
+  para a pessoa, `Match` lê o `Accept-Language` e `Text` dá um texto avulso.
+  Os catálogos ficam em `i18n/en.go` e `i18n/pt_br.go`, e o
+  `TestCatalogsComplete` reprova chave faltando, como o `build.sh` do
+  Kandela. O princípio "a biblioteca prova; o app decide" continua: quem
+  tem texto próprio ignora o pacote. `ErrRejected` tem um texto só, para a
+  mensagem não contar se o login existe. Ele entra no núcleo e importa
+  `password` e `provider`, sem dependência nova.
+- **O exemplo fala os dois idiomas** pelo `i18n`, com as rotas em inglês
+  (`/login/{p}`, `/callback/{p}`, `/signin`) e o `.env.example` com
+  `PUBLIC_URL`, `KATRACA_KEY` e `*_CLIENT_ID`/`*_CLIENT_SECRET`.
+- **README em dois idiomas:** `README.md` em inglês e `README.pt-BR.md` em
+  português, com link entre os dois.
+- **Fica em português:** este arquivo e `docs/revisao-2026-10-11.md`, que
+  são a memória do dono e citam os nomes de quando foram escritos. Também
+  ficam em português as mensagens de commit e o `CLAUDE.md`.
+
+A tradução foi feita por cima da revisão de segurança (missão `112ed775`),
+que ainda não estava na `main`, para as duas não brigarem linha a linha.
+**A versão é a `v0.7.0`:** a API toda muda de nome, e a `v0.6.0` é a da
+revisão. Se a `v0.6.0` ainda não tiver subido quando esta entrar, pode
+pular direto para a `v0.7.0`: soltar uma versão com os nomes em português
+para trocá-los no mesmo dia só confundiria quem adotasse.
