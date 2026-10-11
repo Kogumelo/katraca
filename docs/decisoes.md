@@ -310,3 +310,46 @@ As medidas saíram de uma bancada com fresta, espessura do poste, comprimento
 dos braços e fenda reguláveis. Ficaram de fora o braço encostado no poste, o
 gabinete grosso como direção própria e a borda da placa fazendo o papel do
 poste.
+
+## O `Pendente` ganha selo, e a versão é a `v0.5.0` (11/10/2026)
+
+Até aqui, guardar o `Pendente` entre a ida e a volta era do app, e o README
+pedia um cookie assinado. O Kotonazo (missão `d50b2be5`) e o Zebra (missão
+`398c0c10`) iam escrever cada um o seu HMAC: duas peças de segurança para
+revisar. A biblioteca passa a ter uma, o `provedor.Selo`, como camada
+opcional por cima. `Iniciar` e `Concluir` não mudaram.
+
+- **Cifrado, não só assinado: AES-256-GCM**, da biblioteca padrão. O
+  `Pendente` leva o verificador PKCE e o nonce. Com HMAC eles iriam legíveis
+  no cookie, e o PKCE existe para que o verificador não passe pelo
+  navegador. O GCM autentica e esconde de uma vez, e confere a etiqueta em
+  tempo constante. O custo é o tamanho: cerca de 350 caracteres, que cabem
+  com folga num cookie.
+- **A chave do AES sai de um HMAC-SHA256 da chave do app** com o rótulo
+  `katraca/provedor/selo/k1`. Assim o app pode usar a mesma chave em outro
+  lugar sem que um uso abra o outro.
+- **Chave de 32 bytes ou mais**, senão `ErrChaveCurta`. É erro de
+  configuração e não embrulha `ErrRecusado`.
+- **Formato `k1.<base64url(nonce‖cifra)>`.** O `k1` também entra como dado
+  associado do GCM. Um formato novo vira `k2` sem confundir os selos antigos.
+- **O prazo vai dentro**: `Criado + PrazoDoInicio`, o mesmo que `Concluir`
+  confere. Vencido dá `katraca.ErrExpirado`; adulterado, de outra chave, de
+  outro formato ou maior que 2 KiB dá erro que embrulha `katraca.ErrRecusado`.
+- **Troca de chave:** `Chaves[0]` sela e todas abrem. A abertura tenta uma
+  a uma. Não há identificador de chave no selo, porque com duas ou três
+  chaves ele economizaria pouco e mostraria qual está em uso.
+- **A ajuda de `net/http`** (`PlantarCookie`, `LerCookie`) usa só
+  `http.ResponseWriter` e `*http.Request`, que o gin também expõe. O cookie
+  `katraca_pendente` sai `HttpOnly`, `Secure`, `SameSite=Lax`, com o caminho
+  da volta e `MaxAge` até o fim do prazo. `LerCookie` apaga o cookie ao ler.
+- **O que o selo não resolve:** ele não é de uso único no servidor. Quem
+  copiar o cookie dentro dos 10 minutos tem o mesmo que a pessoa, como antes.
+  E a volta por `form_post` (Apple) não leva cookie `SameSite=Lax`; quem
+  ligar a Apple planta o texto de `Selar` num cookie `SameSite=None`.
+
+O `exemplo/main.go` passa a usar o selo, com a chave em `SELO_CHAVE` no
+`.env` (vazia no `.env.exemplo`; sem ela, o exemplo sorteia uma ao subir).
+
+**A versão é a `v0.5.0`, não a `v0.2.0`** que o briefing pedia: a `v0.2.0`
+já existe (abandonada, sob o nome `acesso`) e a última publicada é a
+`v0.4.0`. Tag publicada não se move, e API nova sobe o número do meio.

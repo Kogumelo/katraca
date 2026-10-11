@@ -8,7 +8,7 @@ Biblioteca Go que **prova quem a pessoa é**, comum aos apps da Kogumelo
 (Kotonazo, Zebra de Chapéu e os que vierem).
 
 ```sh
-go get github.com/Kogumelo/katraca@v0.4.0
+go get github.com/Kogumelo/katraca@v0.5.0
 ```
 
 ## O que ela faz e o que fica no app
@@ -136,10 +136,42 @@ id, err := p.Concluir(ctx, pend, r.Form)   // na volta
 - Prazo (10 s) e limite de tamanho (1 MiB) em toda resposta de provedor.
 - O `Pendente` vence em 10 minutos.
 
-O `Pendente` é do app. Guarde-o num cookie `HttpOnly`, **assinado** e de vida
-curta, ou na sessão do servidor. Quem o tiver conclui o login no lugar da
-pessoa. O exemplo em [`exemplo/main.go`](exemplo/main.go) mostra o fluxo
-inteiro com `net/http`.
+O `Pendente` é do app, e quem o tiver conclui o login no lugar da pessoa.
+Para guardá-lo no navegador, use o `provedor.Selo`, com a chave do app:
+
+```go
+selo := &provedor.Selo{Chaves: [][]byte{chave}} // 32 bytes ou mais, de crypto/rand
+
+// na ida:
+url, pend, err := p.Iniciar(ctx)
+err = selo.PlantarCookie(w, "/volta/", pend)
+http.Redirect(w, r, url, http.StatusFound)
+
+// na volta:
+pend, err := selo.LerCookie(w, r, "/volta/") // abre e apaga o cookie
+id, err := p.Concluir(ctx, pend, r.Form)
+```
+
+- O `Pendente` vai **cifrado e autenticado** (AES-256-GCM): o navegador não
+  lê o verificador PKCE nem o nonce, e não troca nada sem que a abertura
+  recuse.
+- O prazo vai dentro do selo, o mesmo `PrazoDoInicio` de `Concluir`.
+- Selo adulterado, de outra chave ou vencido dá erro que embrulha
+  `katraca.ErrRecusado`. Chave com menos de 32 bytes dá `ErrChaveCurta`.
+- O cookie (`katraca_pendente`) sai `HttpOnly`, `Secure`, `SameSite=Lax`,
+  restrito ao caminho da volta e com `MaxAge` até o fim do prazo.
+- **Troca de chave:** ponha a nova na frente, `Chaves: [][]byte{nova,
+  antiga}`. A primeira sela e todas abrem. Passados 10 minutos, tire a
+  antiga.
+- Quem não usa `net/http` direto chama `selo.Selar(pend)` e
+  `selo.Abrir(texto)` e guarda o texto onde quiser. No gin,
+  `c.Writer` e `c.Request` servem a `PlantarCookie` e `LerCookie`.
+- Volta por `form_post` (a Apple) é um POST de outro site, e o navegador não
+  manda cookie `SameSite=Lax` nele. Ali, plante o texto de `Selar` você
+  mesmo, num cookie `SameSite=None` e `Secure`.
+
+O exemplo em [`exemplo/main.go`](exemplo/main.go) mostra o fluxo inteiro com
+`net/http`.
 
 ```go
 g, err := provedor.NovoGoogle(provedor.Google{ClienteID: ..., Segredo: ..., Retorno: ...})
@@ -270,6 +302,8 @@ Os provedores são testados contra servidores falsos (`httptest`), com chaves
 RSA e EC geradas no teste. Os testes cobrem:
 
 - `state` errado ou ausente;
+- selo do `Pendente` adulterado, de outra chave, vencido, com chave curta e
+  com troca de chave;
 - verificador PKCE de outra ida;
 - nonce, `aud`, `iss` e `exp` adulterados;
 - assinatura de outra chave;

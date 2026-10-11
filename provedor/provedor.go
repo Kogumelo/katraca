@@ -4,13 +4,14 @@
 // O fluxo tem duas metades, e entre elas a pessoa vai ao provedor e volta:
 //
 //	url, pend, err := p.Iniciar(ctx)
-//	// o app guarda pend (cookie assinado, sessao) e redireciona para url
+//	// o app guarda pend (Selo.PlantarCookie, ou a sessao) e redireciona
 //	...
 //	// na volta, com os parametros que o provedor mandou (r.Form):
 //	id, err := p.Concluir(ctx, pend, r.Form)
 //
 // Pendente leva o state, o verificador PKCE e o nonce. Guarda-lo e do app,
-// e e ele que amarra a volta a quem saiu: sem ele, Concluir recusa.
+// e e ele que amarra a volta a quem saiu: sem ele, Concluir recusa. Selo o
+// cifra com a chave do app para ir num cookie.
 package provedor
 
 import (
@@ -43,7 +44,7 @@ type Provedor interface {
 
 // Pendente e o que o app guarda entre Iniciar e Concluir. Nao e segredo de
 // longo prazo, mas quem o tem conclui o login no lugar da pessoa: guarde-o
-// num cookie HttpOnly, assinado, de vida curta, ou na sessao do servidor.
+// com Selo (cookie cifrado, HttpOnly, de vida curta) ou na sessao do servidor.
 type Pendente struct {
 	Provedor    string    `json:"p"`
 	Estado      string    `json:"s"`
