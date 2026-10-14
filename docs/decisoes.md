@@ -470,3 +470,34 @@ para trocá-los no mesmo dia só confundiria quem adotasse.
 (o merge acima, sem nada depois na `main`). Até então só a `v0.6.0` tinha
 subido, e o `go get …@v0.7.0` do README falhava. O CI da tag passou e o
 `proxy.golang.org` já responde pela versão.
+
+## A propaganda fica fora da Katraca, e o acesso não vai para o KOGUMELO.NET (14/10/2026)
+
+**A pergunta do operador:** concentrar na Katraca também os anúncios dos
+produtos (serviços da própria Kogumelo enquanto o AdSense não entra no
+Kotonazo e no kilohertz.me)? Ou levar acesso e anúncio para o KOGUMELO.NET,
+que já centraliza NFS-e, integração bancária e, em breve, WhatsApp e
+assinatura digital?
+
+**Decidido:**
+
+- **Anúncio não entra na Katraca.** Ela é biblioteca compilada dentro de
+  cada app e só prova identidade. Anúncio é conteúdo no ar, cadastrado num
+  lugar e mostrado em vários sites: não cabe aqui e quebraria o "a
+  biblioteca prova; o app decide".
+- **O acesso não vai para o KOGUMELO.NET por ora.** Reforça o descarte do
+  serviço central de contas de 10/10 (primeira seção deste arquivo). Pôr o
+  login aberto dos jogos ao lado do sistema fiscal e bancário juntaria as
+  brechas, e uma queda dele tiraria a entrada dos jogos. O login único
+  entre produtos só compensa quando houver gente usando dois deles.
+- **Os anúncios também não precisam do KOGUMELO.NET.** São uma lista de
+  imagem, texto, link e peso por espaço da página: um `anuncios.json`
+  estático publicado pelo site da Kogumelo, sem painel nem banco de dados.
+  Um espaço pode valer `"adsense"` para passar ao Google sem mudar o código
+  dos sites. A medição é por UTM no link; nada de cookie.
+
+**Missões guardadas:** `50f83b74` (site da Kogumelo publica a lista e o
+script), `75aeed52` (Kotonazo passa a ler a lista e adequa a tarefa de
+monetização que já tinha) e `e877038c` (kilohertz.me passa a ler a
+lista); as duas últimas esperam a primeira. Nada muda no código da
+Katraca.
