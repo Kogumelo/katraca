@@ -465,3 +465,8 @@ que ainda não estava na `main`, para as duas não brigarem linha a linha.
 revisão. Se a `v0.6.0` ainda não tiver subido quando esta entrar, pode
 pular direto para a `v0.7.0`: soltar uma versão com os nomes em português
 para trocá-los no mesmo dia só confundiria quem adotasse.
+
+**Publicada em 13/10/2026:** a tag anotada `v0.7.0` aponta para o `bd4b269`
+(o merge acima, sem nada depois na `main`). Até então só a `v0.6.0` tinha
+subido, e o `go get …@v0.7.0` do README falhava. O CI da tag passou e o
+`proxy.golang.org` já responde pela versão.
