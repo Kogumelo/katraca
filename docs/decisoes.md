@@ -501,3 +501,20 @@ script), `75aeed52` (Kotonazo passa a ler a lista e adequa a tarefa de
 monetização que já tinha) e `e877038c` (kilohertz.me passa a ler a
 lista); as duas últimas esperam a primeira. Nada muda no código da
 Katraca.
+
+## Login pelo Google: um projeto no Google Cloud por app (16/10/2026)
+
+**A pergunta do operador:** criar no Google o projeto "da Katraca" ou um
+projeto por serviço (Kotonazo, Zebra...)?
+
+**Recomendado: um por app.** A Katraca é biblioteca e não fala com o Google
+por conta própria; quem tem `ClientID` e `ClientSecret` é o app. A tela de
+consentimento do Google mostra nome, logotipo e domínio do projeto, então
+um projeto só faria todos os apps aparecerem com a mesma marca, e uma
+suspensão ou revisão nele derrubaria o login de todos — o mesmo motivo do
+descarte do serviço central (10/10 e 14/10). Separar não fecha a porta para
+um login único futuro: o `sub` do Google é o mesmo em qualquer projeto. O
+Zebra, que já entra pelo Google, deve reaproveitar o projeto que tem.
+
+O passo a passo do console está em [`docs/google.md`](google.md). Nada
+muda no código.
