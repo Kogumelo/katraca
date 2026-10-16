@@ -70,7 +70,13 @@ permissão OAuth") → **Primeiros passos** / **Get started**.
 
 Em **Google Auth Platform → Branding**:
 
-- Logotipo (opcional; enviar logotipo exige verificação de marca).
+- Logotipo (opcional). Quadrado, 120×120 px, PNG ou JPG, até 1 MB, com o
+  fundo **até a borda**: um ícone de cantos arredondados sobre fundo
+  transparente aparece com cantos brancos, porque o console pinta o
+  transparente de branco. Use a versão "maskable" do ícone do app (a de PWA,
+  que preenche o quadrado). Com logotipo, publicar o app exige a
+  verificação de marca (passo 6); sem ele, publica na hora. Em modo de
+  teste, nada disso pesa.
 - **Página inicial**, **política de privacidade** e termos de uso.
 - **Domínios autorizados:** o domínio raiz do app (`kotonazo.com`). Toda
   URL de retorno e as páginas acima precisam estar nesses domínios.
